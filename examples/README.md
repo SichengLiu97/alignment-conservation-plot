@@ -16,7 +16,19 @@
 | `example.svg` / `example.pdf` / `example.png` | 同一张图，SVG / PDF / PNG |
 | `windows.tsv` | 逐窗口统计 |
 | `summary.json` | 汇总（序列、端部 gap、热点、indel、基因） |
-| `reference.gb` | NC_004718.3 的 GenBank 注释，供基因轨道使用 |
+| `reference.gb` | NC_004718.3 的 GenBank 注释，供基因轨道使用（离线复现用） |
+
+也可以不下载注释文件，直接给 accession：
+
+```bash
+./.venv/bin/python align_conservation_plot.py \
+    -i "../../1 - Assembly and Annotation of the SARS-CoV-2 Genome/Galaxy17-[needle on dataset 9 and 16].srspair" \
+    -o examples/example.svg --pdf --coords-seq 2 \
+    --annotation NC_004718.3
+```
+
+首次运行会从 NCBI 下载并缓存到 `~/Library/Caches/align-conservation-plot/NC_004718.3.gb`，
+之后离线也能用。
 
 核对数值：端部 gap 8,917 / 119，核心区 21,072 列，matches 17,219，
 mismatches 3,185，identity 84.4%。

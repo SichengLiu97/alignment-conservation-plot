@@ -13,7 +13,11 @@ Examples
 CLI::
 
     python align_conservation_plot.py -i aln.srspair -o fig.svg --pdf \
-        --coords-seq 2 --annotation ref.gb
+        --coords-seq 2 --annotation NC_004718.3
+
+``--annotation`` takes either a local GenBank/GFF3/TSV file or an NCBI
+accession, which is downloaded once and cached under the user cache
+directory (``~/Library/Caches/align-conservation-plot`` on macOS).
 
 GUI::
 
@@ -30,6 +34,7 @@ import os
 import re
 import sys
 import traceback
+import urllib.parse
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -580,13 +585,21 @@ def _name_from_qualifiers(qualifiers: Dict[str, List[str]], fallback: str) -> st
 
 
 def load_genbank(path: str, record_id: Optional[str] = None) -> List[Feature]:
-    from Bio import SeqIO
-
     handle_ctx = gzip.open(path, "rt") if path.endswith(".gz") else open(path, "r")
     with handle_ctx as handle:
-        records = list(SeqIO.parse(handle, "genbank"))
+        return parse_genbank_text(handle.read(), record_id, source_name=path)
+
+
+def parse_genbank_text(
+    text: str, record_id: Optional[str] = None, source_name: str = "<genbank>"
+) -> List[Feature]:
+    import io
+
+    from Bio import SeqIO
+
+    records = list(SeqIO.parse(io.StringIO(text), "genbank"))
     if not records:
-        return []
+        raise ValueError(f"{source_name} 不是有效的 GenBank 记录")
     record = records[0]
     if record_id:
         for r in records:
@@ -617,6 +630,177 @@ def load_genbank(path: str, record_id: Optional[str] = None) -> List[Feature]:
         if buckets[key]:
             return _dedupe_features(buckets[key])
     return []
+
+
+ACCESSION_RE = re.compile(r"^[A-Za-z]{1,6}_?\d+(?:\.\d+)?$")
+NCBI_EFETCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+
+
+class AnnotationFetchError(RuntimeError):
+    """Raised when an online annotation cannot be retrieved."""
+
+
+def looks_like_accession(value: str) -> bool:
+    """True for NCBI-style accessions such as NC_004718.3 or MN908947."""
+    value = (value or "").strip()
+    if not value or os.path.exists(value):
+        return False
+    if "://" in value or os.sep in value:
+        return False
+    return bool(ACCESSION_RE.match(value))
+
+
+def annotation_cache_dir() -> str:
+    override = os.environ.get("ALIGN_PLOT_CACHE")
+    if override:
+        return os.path.expanduser(override)
+    if sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Caches")
+    elif os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
+    else:
+        base = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+    return os.path.join(base, "align-conservation-plot")
+
+
+def cache_path_for(accession: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", accession.upper())
+    return os.path.join(annotation_cache_dir(), f"{safe}.gb")
+
+
+def _clean_ncbi_detail(raw: str) -> str:
+    """Turn NCBI's percent/plus-encoded error body into readable text."""
+    text = urllib.parse.unquote(raw)
+    text = re.sub(r"(?<=\w)\+(?=\w)", "", text)
+    text = text.replace("+", " ")
+    text = " ".join(text.split())
+    text = re.sub(r"(?<=\d)\s*\.\s*(?=\d)", ".", text)
+    text = re.sub(r"(?<=\w)\s+:\s*(?=\w)", ": ", text)
+    return text[:200]
+
+
+def _http_get(url: str, timeout: float) -> str:
+    import urllib.error
+    import urllib.request
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "align-conservation-plot/1.1 (+https://github.com/)",
+            "Accept": "text/plain",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        charset = response.headers.get_content_charset() or "utf-8"
+        return response.read().decode(charset, errors="replace")
+
+
+def fetch_genbank_text(
+    accession: str,
+    timeout: float = 60.0,
+    use_cache: bool = True,
+    refresh: bool = False,
+    email: Optional[str] = None,
+    api_key: Optional[str] = None,
+    retries: int = 3,
+) -> Tuple[str, str]:
+    """Download a GenBank record from NCBI.
+
+    Returns ``(genbank_text, origin)`` where origin is ``"cache"`` or
+    ``"download"``.  Network access honours ``http_proxy`` / ``https_proxy``
+    from the environment, so a local proxy is honoured automatically.
+    """
+    import time
+    import urllib.error
+
+    accession = accession.strip().upper()
+    path = cache_path_for(accession)
+    if use_cache and not refresh and os.path.exists(path):
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            text = handle.read()
+        if "LOCUS" in text:
+            return text, "cache"
+
+    params = {
+        "db": "nuccore",
+        "id": accession,
+        "rettype": "gbwithparts",
+        "retmode": "text",
+    }
+    email = email or os.environ.get("NCBI_EMAIL")
+    api_key = api_key or os.environ.get("NCBI_API_KEY")
+    if email:
+        params["email"] = email
+    if api_key:
+        params["api_key"] = api_key
+    query = "&".join(f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items())
+    url = f"{NCBI_EFETCH}?{query}"
+
+    last_error: Optional[Exception] = None
+    for attempt in range(retries):
+        try:
+            text = _http_get(url, timeout)
+        except urllib.error.HTTPError as exc:
+            detail = ""
+            try:
+                detail = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            detail = _clean_ncbi_detail(detail)
+            if exc.code in (400, 404) or "Failed to retrieve" in detail:
+                raise AnnotationFetchError(
+                    f"NCBI 找不到 accession {accession}（HTTP {exc.code}）。"
+                    "请确认编号与版本号正确，例如 NC_004718.3。"
+                    + (f" 服务器返回：{detail}" if detail else "")
+                ) from exc
+            raise AnnotationFetchError(
+                f"NCBI 返回 HTTP {exc.code}（accession {accession}）。{detail}".strip()
+            ) from exc
+        except Exception as exc:  # noqa: BLE001 - URLError, timeout, DNS, proxy
+            last_error = exc
+            if attempt + 1 < retries:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            break
+
+        if "LOCUS" in text and "FEATURES" in text:
+            if use_cache:
+                try:
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    with open(path, "w", encoding="utf-8") as handle:
+                        handle.write(text)
+                except OSError:
+                    pass
+            return text, "download"
+
+        compact = " ".join(text.split())[:300]
+        if "Error" in text or "error" in text or not compact:
+            raise AnnotationFetchError(
+                f"NCBI 未返回 GenBank 记录（accession {accession}）：{compact or '空响应'}"
+            )
+        raise AnnotationFetchError(
+            f"NCBI 响应中没有 FEATURES 段（accession {accession}）：{compact}"
+        )
+
+    raise AnnotationFetchError(
+        f"无法连接 NCBI 获取 {accession}：{last_error}。"
+        "请检查网络；若本机通过代理上网，可设置 "
+        "http_proxy/https_proxy（例如 http://127.0.0.1:8080）。"
+    )
+
+
+def load_genbank_accession(
+    accession: str,
+    record_id: Optional[str] = None,
+    timeout: float = 60.0,
+    use_cache: bool = True,
+    refresh: bool = False,
+) -> Tuple[List[Feature], str]:
+    text, origin = fetch_genbank_text(
+        accession, timeout=timeout, use_cache=use_cache, refresh=refresh
+    )
+    feats = parse_genbank_text(text, record_id, source_name=accession)
+    return feats, origin
 
 
 STANDARD_CODE = {
@@ -676,9 +860,31 @@ def attach_features(
     fmt: Optional[str] = None,
     record_id: Optional[str] = None,
     min_orf_aa: int = 90,
+    annotation_options: Optional[dict] = None,
 ) -> None:
     aln = result.alignment
     if path:
+        if looks_like_accession(path):
+            opts = annotation_options or {}
+            if fmt:
+                result.warnings.append("--annotation-format 对 accession 无效，已忽略")
+            feats, origin = load_genbank_accession(
+                path,
+                record_id,
+                timeout=opts.get("timeout", 60.0),
+                use_cache=opts.get("use_cache", True),
+                refresh=opts.get("refresh", False),
+            )
+            result.features = feats
+            label = "缓存" if origin == "cache" else "已下载"
+            result.feature_source = f"GenBank {path.strip().upper()} ({label})"
+            if not feats:
+                result.warnings.append(f"{path} 中没有可用特征")
+            return
+
+        if not os.path.exists(path):
+            raise FileNotFoundError(2, "annotation file not found", path)
+
         ext = os.path.splitext(path)[1].lower()
         fmt = (fmt or ("genbank" if ext in (".gb", ".gbk", ".genbank", ".gbff") else
                        "gff3" if ext in (".gff", ".gff3") else "tsv")).lower()
@@ -1149,9 +1355,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--out", help="output figure path (.svg)")
     p.add_argument("--pdf", nargs="?", const="", default=None, help="also write PDF (optional path)")
     p.add_argument("--png", nargs="?", const="", default=None, help="also write PNG (optional path)")
-    p.add_argument("--annotation", help="GenBank / GFF3 / TSV annotation file")
+    p.add_argument(
+        "--annotation",
+        help="GenBank / GFF3 / TSV annotation file, or an NCBI accession "
+        "(e.g. NC_004718.3) to download on the fly",
+    )
     p.add_argument("--annotation-format", choices=["genbank", "gff3", "tsv"], help="override format detection")
     p.add_argument("--record", help="GenBank record id to use for annotation")
+    p.add_argument(
+        "--annotation-timeout",
+        type=float,
+        default=60.0,
+        help="seconds to wait for an online annotation download",
+    )
+    p.add_argument(
+        "--no-annotation-cache",
+        action="store_true",
+        help="do not read or write the local download cache",
+    )
+    p.add_argument(
+        "--refresh-annotation",
+        action="store_true",
+        help="ignore the cached copy and download the accession again",
+    )
     p.add_argument("--min-orf-aa", type=int, default=90, help="minimum ORF length when predicting genes")
     p.add_argument("--coords-seq", type=int, default=1, help="1-based index of the coordinate reference sequence")
     p.add_argument("--window", type=int, default=300, help="window size in bp")
@@ -1227,7 +1453,14 @@ def _run_cli_inner(args, out: str) -> int:
         args.annotation_format,
         args.record,
         args.min_orf_aa,
+        annotation_options={
+            "timeout": args.annotation_timeout,
+            "use_cache": not args.no_annotation_cache,
+            "refresh": args.refresh_annotation,
+        },
     )
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     print_report(result, args)
     render_and_save(result, args, out)
     print(f"SVG written: {out}")
@@ -1309,7 +1542,9 @@ def launch_gui() -> int:
     ttk.Button(left, text="浏览…", command=pick_input, width=8).grid(row=row, column=2, padx=(4, 0))
     row += 1
 
-    ttk.Label(left, text="注释文件（可空）").grid(row=row, column=0, columnspan=3, sticky="w", pady=(10, 0))
+    ttk.Label(left, text="注释文件或 accession（可空）").grid(
+        row=row, column=0, columnspan=3, sticky="w", pady=(10, 0)
+    )
     row += 1
     ttk.Entry(left, textvariable=state["annotation"], width=34).grid(row=row, column=0, columnspan=2, sticky="we", pady=3)
 
@@ -1322,6 +1557,14 @@ def launch_gui() -> int:
             state["annotation"].set(path)
 
     ttk.Button(left, text="浏览…", command=pick_annotation, width=8).grid(row=row, column=2, padx=(4, 0))
+    row += 1
+    ttk.Label(
+        left,
+        text="留空则自动预测 ORF；也可直接填 NC_004718.3 联网下载（结果会缓存）",
+        foreground="#777",
+        wraplength=330,
+        font=("PingFang SC", 10),
+    ).grid(row=row, column=0, columnspan=3, sticky="w")
     row += 1
 
     ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=10)
@@ -1418,7 +1661,18 @@ def launch_gui() -> int:
                     hotspot_pct=args.hotspot_pct,
                     keep_terminal_gaps=args.keep_terminal_gaps,
                 )
-                attach_features(result, args.annotation, None, None, 90)
+                attach_features(
+                    result,
+                    args.annotation,
+                    None,
+                    None,
+                    90,
+                    annotation_options={
+                        "timeout": args.annotation_timeout,
+                        "use_cache": not args.no_annotation_cache,
+                        "refresh": args.refresh_annotation,
+                    },
+                )
                 root.after(0, lambda: finish(result, args, None))
             except Exception as exc:  # noqa: BLE001
                 err = "".join(traceback.format_exception_only(type(exc), exc)).strip()

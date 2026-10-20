@@ -40,6 +40,7 @@ http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 ./setup.sh
     -i "../../1 - Assembly and Annotation of the SARS-CoV-2 Genome/Galaxy17-[needle on dataset 9 and 16].srspair" \
     -o figure.svg --pdf \
     --coords-seq 2 --window 300 --step 50 \
+    --annotation NC_004718.3 \
     --title "NODE_1 vs NC_004718.3"
 ```
 
@@ -60,7 +61,10 @@ figure.pdf
 | `--png [PATH]` | 关 | 同时输出 PNG（`--dpi` 控制分辨率） |
 | `--coords-seq` | `1` | 用第几条序列做坐标轴（1-based）。与参考基因组比对时通常设为 `2` |
 | `--window` / `--step` | `300` / `50` | 滑窗大小与步长（bp） |
-| `--annotation` | 无 | GenBank / GFF3 / TSV 注释文件 |
+| `--annotation` | 无 | 注释文件路径，**或 NCBI accession（如 `NC_004718.3`）** |
+| `--annotation-timeout` | `60` | 在线下载超时（秒） |
+| `--no-annotation-cache` | 关 | 不读也不写本地下载缓存 |
+| `--refresh-annotation` | 关 | 忽略缓存，重新下载 |
 | `--annotation-format` | 自动 | `genbank` / `gff3` / `tsv` |
 | `--record` | 第一个 | GenBank 多记录时指定 record id |
 | `--min-orf-aa` | `90` | 自动预测 ORF 的最短氨基酸长度 |
@@ -82,6 +86,7 @@ figure.pdf
 ```
 
 - 左侧填写参数，右侧实时预览；
+- 「注释文件或 accession」框可以直接填 `NC_004718.3`，联网下载（有缓存）；
 - 「导出 SVG / PDF / 数据」按钮直接保存；
 - 计算在后台线程执行，不阻塞界面。
 
@@ -93,6 +98,30 @@ figure.pdf
 - **端部 gap**：所有序列都为 gap 的连续列，默认剔除并在页脚注明长度。
 - **indel**：某条序列中连续 gap ≥ `--indel-min` 的区段。
 - **热点**：滑窗 identity 低于 `median − k×1.4826×MAD`（或指定百分位）的窗口，合并为区间。
+
+## 在线注释（accession）
+
+`--annotation` 除了本地文件，也可以直接填 NCBI accession，程序会自动下载：
+
+```bash
+./.venv/bin/python align_conservation_plot.py \
+    -i aln.srspair -o fig.svg --coords-seq 2 \
+    --annotation NC_004718.3
+```
+
+- 走 E-utilities `efetch`（`db=nuccore`, `rettype=gbwithparts`）。
+- 下载结果缓存在 `~/Library/Caches/align-conservation-plot/<accession>.gb`
+  （Linux `$XDG_CACHE_HOME`，Windows `%LOCALAPPDATA%`；可用环境变量
+  `ALIGN_PLOT_CACHE` 覆盖）。用 `--refresh-annotation` 强制重下。
+- 支持 `NCBI_API_KEY` / `NCBI_EMAIL` 环境变量（提高限速配额）。
+- 需要代理时，`http_proxy` / `https_proxy` 会被自动沿用：
+
+  ```bash
+  http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 \
+    ./.venv/bin/python align_conservation_plot.py ... --annotation NC_004718.3
+  ```
+
+- 图例页脚会标注来源，例如 `GenBank NC_004718.3 (已下载)` 或 `(缓存)`。
 
 ## 注释文件
 

@@ -145,7 +145,7 @@
       "columns": 2448
     }
   ],
-  "annotation_source": "GenBank",
+  "annotation_source": "GenBank NC_004718.3 (缓存)",
   "features": [
     {
       "name": "ORF1ab",
