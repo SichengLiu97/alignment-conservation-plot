@@ -1,0 +1,230 @@
+{
+  "sequences": [
+    "NODE_1_length",
+    "NC_004718.3"
+  ],
+  "source_format": "emboss",
+  "alignment_columns": 30108,
+  "coordinate_sequence": "NC_004718.3",
+  "compared_region": [
+    8918,
+    29632
+  ],
+  "compared_bp": 20715,
+  "terminal_all_gap_columns": [
+    8917,
+    119
+  ],
+  "core_columns": 21072,
+  "matches": 17219,
+  "mismatches": 3185,
+  "gap_columns": 668,
+  "identity_ungapped_pct": 84.39,
+  "identity_with_gaps_pct": 81.715,
+  "window": 300,
+  "step": 50,
+  "indel_threshold_bp": 8,
+  "indels": [
+    {
+      "sequence": "NODE_1_length",
+      "kind": "deletion",
+      "position": 21533,
+      "length": 9
+    },
+    {
+      "sequence": "NODE_1_length",
+      "kind": "deletion",
+      "position": 21547,
+      "length": 9
+    },
+    {
+      "sequence": "NODE_1_length",
+      "kind": "deletion",
+      "position": 21914,
+      "length": 11
+    },
+    {
+      "sequence": "NODE_1_length",
+      "kind": "deletion",
+      "position": 28059,
+      "length": 8
+    },
+    {
+      "sequence": "NODE_1_length",
+      "kind": "deletion",
+      "position": 29587,
+      "length": 14
+    },
+    {
+      "sequence": "NODE_1_length",
+      "kind": "deletion",
+      "position": 29609,
+      "length": 13
+    },
+    {
+      "sequence": "NC_004718.3",
+      "kind": "deletion",
+      "position": 21706,
+      "length": 21
+    },
+    {
+      "sequence": "NC_004718.3",
+      "kind": "deletion",
+      "position": 21942,
+      "length": 15
+    },
+    {
+      "sequence": "NC_004718.3",
+      "kind": "deletion",
+      "position": 21945,
+      "length": 10
+    },
+    {
+      "sequence": "NC_004718.3",
+      "kind": "deletion",
+      "position": 22091,
+      "length": 10
+    },
+    {
+      "sequence": "NC_004718.3",
+      "kind": "deletion",
+      "position": 22173,
+      "length": 8
+    },
+    {
+      "sequence": "NC_004718.3",
+      "kind": "deletion",
+      "position": 22212,
+      "length": 10
+    },
+    {
+      "sequence": "NC_004718.3",
+      "kind": "deletion",
+      "position": 22901,
+      "length": 9
+    },
+    {
+      "sequence": "NC_004718.3",
+      "kind": "deletion",
+      "position": 23488,
+      "length": 13
+    },
+    {
+      "sequence": "NC_004718.3",
+      "kind": "deletion",
+      "position": 27883,
+      "length": 20
+    },
+    {
+      "sequence": "NC_004718.3",
+      "kind": "deletion",
+      "position": 27916,
+      "length": 14
+    }
+  ],
+  "hotspots": [
+    {
+      "start": 9168,
+      "end": 9617,
+      "identity_pct": 75.44,
+      "gap_pct": 3.04,
+      "columns": 1218
+    },
+    {
+      "start": 21518,
+      "end": 23817,
+      "identity_pct": 75.05,
+      "gap_pct": 8.8,
+      "columns": 10482
+    },
+    {
+      "start": 25318,
+      "end": 26017,
+      "identity_pct": 75.63,
+      "gap_pct": 3.8,
+      "columns": 2448
+    }
+  ],
+  "annotation_source": "GenBank",
+  "features": [
+    {
+      "name": "ORF1ab",
+      "start": 265,
+      "end": 21485,
+      "strand": "+"
+    },
+    {
+      "name": "S",
+      "start": 21492,
+      "end": 25259,
+      "strand": "+"
+    },
+    {
+      "name": "ORF3a",
+      "start": 25268,
+      "end": 26092,
+      "strand": "+"
+    },
+    {
+      "name": "ORF3b",
+      "start": 25689,
+      "end": 26153,
+      "strand": "+"
+    },
+    {
+      "name": "E",
+      "start": 26117,
+      "end": 26347,
+      "strand": "+"
+    },
+    {
+      "name": "M",
+      "start": 26398,
+      "end": 27063,
+      "strand": "+"
+    },
+    {
+      "name": "ORF6",
+      "start": 26913,
+      "end": 27265,
+      "strand": "+"
+    },
+    {
+      "name": "ORF7a",
+      "start": 27273,
+      "end": 27641,
+      "strand": "+"
+    },
+    {
+      "name": "ORF7b",
+      "start": 27638,
+      "end": 27772,
+      "strand": "+"
+    },
+    {
+      "name": "ORF8a",
+      "start": 27779,
+      "end": 27898,
+      "strand": "+"
+    },
+    {
+      "name": "ORF8b",
+      "start": 27864,
+      "end": 28118,
+      "strand": "+"
+    },
+    {
+      "name": "N",
+      "start": 28120,
+      "end": 29388,
+      "strand": "+"
+    },
+    {
+      "name": "sars9b",
+      "start": 28130,
+      "end": 28426,
+      "strand": "+"
+    }
+  ],
+  "warnings": []
+}
