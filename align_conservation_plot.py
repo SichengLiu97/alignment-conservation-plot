@@ -1560,7 +1560,7 @@ def launch_gui() -> int:
     row += 1
     ttk.Label(
         left,
-        text="留空则自动预测 ORF；也可直接填 NC_004718.3 联网下载（结果会缓存）",
+        text="留空则自动预测 ORF；也可直接填 NCBI Accession No.（形如 NC_004718.3）联网下载（结果会缓存）",
         foreground="#777",
         wraplength=330,
         font=("PingFang SC", 10),
