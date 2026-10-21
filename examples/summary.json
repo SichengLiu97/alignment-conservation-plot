@@ -124,28 +124,46 @@
   ],
   "hotspots": [
     {
+      "index": 1,
       "start": 9168,
       "end": 9617,
-      "identity_pct": 75.44,
-      "gap_pct": 3.04,
-      "columns": 1218
+      "length": 450,
+      "identity_pct": 77.1,
+      "identity_with_gaps_pct": 74.24,
+      "gap_pct": 3.71,
+      "indel_bp": 0,
+      "indel_bp_pct": 0.0,
+      "region": "ORF1ab",
+      "columns": 458
     },
     {
+      "index": 2,
       "start": 21518,
       "end": 23817,
-      "identity_pct": 75.05,
-      "gap_pct": 8.8,
-      "columns": 10482
+      "length": 2300,
+      "identity_pct": 75.69,
+      "identity_with_gaps_pct": 67.57,
+      "gap_pct": 10.73,
+      "indel_bp": 125,
+      "indel_bp_pct": 5.43,
+      "region": "S",
+      "columns": 2461
     },
     {
+      "index": 3,
       "start": 25318,
       "end": 26017,
-      "identity_pct": 75.63,
-      "gap_pct": 3.8,
-      "columns": 2448
+      "length": 700,
+      "identity_pct": 76.71,
+      "identity_with_gaps_pct": 73.6,
+      "gap_pct": 4.05,
+      "indel_bp": 0,
+      "indel_bp_pct": 0.0,
+      "region": "ORF3a / ORF3b",
+      "columns": 716
     }
   ],
-  "annotation_source": "GenBank NC_004718.3 (缓存)",
+  "annotation_source": "GenBank",
   "features": [
     {
       "name": "ORF1ab",

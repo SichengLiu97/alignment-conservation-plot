@@ -98,6 +98,25 @@ class Hotspot:
     ident: float
     gap_frac: float
     ncols: int
+    matches: float = 0.0
+    mismatches: float = 0.0
+    gaps: int = 0
+    indel_bp: int = 0
+
+    @property
+    def length(self) -> int:
+        return self.end - self.start + 1
+
+    @property
+    def ident_with_gaps(self) -> float:
+        """Identity when gap columns stay in the denominator."""
+        denom = self.ncols
+        return 100.0 * self.matches / denom if denom else 0.0
+
+    @property
+    def indel_bp_pct(self) -> float:
+        """Share of the region covered by reported (>= threshold) indels."""
+        return 100.0 * self.indel_bp / self.length if self.length else 0.0
 
 
 @dataclass
@@ -455,22 +474,42 @@ def analyse(
                 merged[-1].append(w)
             else:
                 merged.append([w])
+        def region_stats(start: int, end: int) -> Tuple[float, float, int, int]:
+            """Exact column statistics for a coordinate range (windows overlap)."""
+            cols: List[int] = []
+            for c in range(start, end + 1):
+                cols.extend(by_coord.get(c, ()))
+            same_total = pair_total = 0.0
+            gap_cols = 0
+            for i in cols:
+                same, total = column_pair_score(seqs, i)
+                if total == 0:
+                    gap_cols += 1
+                same_total += same
+                pair_total += total
+            return same_total, pair_total - same_total, gap_cols, len(cols)
+
         for group in merged:
             if len(group) < 2 and len(low) > 1:
                 # keep isolated single windows only when they are clearly worst
                 if group[0].ident_ungapped > threshold - 1.0:
                     continue
-            m = sum(g.matches for g in group)
-            mm = sum(g.mismatches for g in group)
-            gp = sum(g.gaps for g in group)
-            n = sum(g.ncols for g in group)
+            hs_start, hs_end = group[0].start, group[-1].end
+            m, mm, gp, n = region_stats(hs_start, hs_end)
+            indel_bp = sum(
+                ind.length for ind in indels if hs_start <= ind.coord <= hs_end
+            )
             hotspots.append(
                 Hotspot(
-                    start=group[0].start,
-                    end=group[-1].end,
+                    start=hs_start,
+                    end=hs_end,
                     ident=100.0 * m / (m + mm) if m + mm else 0.0,
                     gap_frac=100.0 * gp / n if n else 0.0,
                     ncols=n,
+                    matches=m,
+                    mismatches=mm,
+                    gaps=gp,
+                    indel_bp=indel_bp,
                 )
             )
 
@@ -923,6 +962,9 @@ LANG_PRESETS = {
         "median": "median {value:.1f}%",
         "legend_identity": "identity (gap-free)",
         "legend_hotspot": "low-conservation hotspot",
+        "subtitle_columns": "{value:,} alignment columns",
+        "subtitle_identity": "{value:.1f}% identity",
+        "subtitle_multi": "{nseq} sequences, mean pairwise identity",
         "footer": (
             "Window {window} bp / step {step} bp. Identity excludes gap columns; "
             "median {median:.1f}%. Terminal all-gap columns {lead:,} / {trail:,} "
@@ -938,6 +980,9 @@ LANG_PRESETS = {
         "median": "中位数 {value:.1f}%",
         "legend_identity": "一致度（不计 gap）",
         "legend_hotspot": "低保守热点",
+        "subtitle_columns": "{value:,} 列",
+        "subtitle_identity": "{value:.1f}% 一致度",
+        "subtitle_multi": "{nseq} 条序列，平均两两一致度",
         "footer": (
             "窗口 {window} bp / 步长 {step} bp；一致度不计 gap 列，中位数 {median:.1f}%。"
             "已剔除两端全 gap 列 {lead:,} / {trail:,} 列。基因来源：{source}。"
@@ -1032,11 +1077,12 @@ def build_figure(result: AnalysisResult, opts) -> "object":
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
 
-    # hotspot numbers
-    for i, hs in enumerate(result.hotspots[:9], start=1):
+    # hotspot numbers: every hotspot is numbered so the table indices match
+    for i, hs in enumerate(result.hotspots, start=1):
+        offset = 0.06 if (i % 2 or len(result.hotspots) <= 8) else 0.15
         ax.text(
             (hs.start + hs.end) / 2,
-            yhi - (yhi - ylo) * 0.06,
+            yhi - (yhi - ylo) * offset,
             str(i),
             ha="center",
             va="top",
@@ -1190,9 +1236,9 @@ def build_figure(result: AnalysisResult, opts) -> "object":
         title = f"{aln.names[0]} (+{aln.nseq - 1} more)"
     subtitle_bits = []
     if aln.nseq > 2:
-        subtitle_bits.append(f"{aln.nseq} sequences, mean pairwise identity")
-    subtitle_bits.append(f"{result.core_columns:,} alignment columns")
-    subtitle_bits.append(f"{result.identity_ungapped:.1f}% identity")
+        subtitle_bits.append(t["subtitle_multi"].format(nseq=aln.nseq))
+    subtitle_bits.append(t["subtitle_columns"].format(value=result.core_columns))
+    subtitle_bits.append(t["subtitle_identity"].format(value=result.identity_ungapped))
     ax_head.text(0.0, 0.92, title, fontsize=12.5, fontweight="bold", ha="left", va="top")
     ax_head.text(0.0, 0.18, "  |  ".join(subtitle_bits), fontsize=8, color="#555", ha="left", va="bottom")
 
@@ -1214,6 +1260,93 @@ def build_figure(result: AnalysisResult, opts) -> "object":
 # --------------------------------------------------------------------------
 # Reporting
 # --------------------------------------------------------------------------
+
+HOTSPOT_TABLE_COLUMNS = (
+    "index",
+    "coords",
+    "length",
+    "ident_ungapped",
+    "ident_with_gaps",
+    "indel",
+    "region",
+)
+
+HOTSPOT_TABLE_HEADERS = {
+    "zh": (
+        "序号",
+        "坐标 (bp)",
+        "长度 (bp)",
+        "一致度 % (不计gap)",
+        "一致度 %（计gap）",
+        "插入或删除 % (gap 列 / 插入或删除 bp)",
+        "所在区域",
+    ),
+    "en": (
+        "#",
+        "Coordinates (bp)",
+        "Length (bp)",
+        "Identity % (ungapped)",
+        "Identity % (with gaps)",
+        "Indel % (gap cols / indel bp)",
+        "Region",
+    ),
+}
+
+HOTSPOT_TABLE_NOTE = {
+    "zh": (
+        "插入或删除 % 同时给出两个数：区间内 gap 列占比 / "
+        "该区间内 ≥ 阈值的插入或删除事件覆盖的比例。"
+    ),
+    "en": (
+        "Indel % shows gap-column share / share covered by indels at or above "
+        "the reporting threshold."
+    ),
+}
+
+
+def hotspot_region(result: AnalysisResult, hotspot: Hotspot) -> str:
+    """Name the annotated feature(s) overlapping a hotspot."""
+    if not result.features:
+        return "—"
+    overlaps = []
+    for feat in result.features:
+        overlap = min(hotspot.end, feat.end) - max(hotspot.start, feat.start) + 1
+        if overlap > 0:
+            overlaps.append((overlap, feat.name))
+    if not overlaps:
+        return "—"
+    overlaps.sort(key=lambda item: (-item[0], item[1]))
+    best_overlap, best_name = overlaps[0]
+    names = [best_name]
+    if len(overlaps) > 1:
+        second_overlap, second_name = overlaps[1]
+        if second_name != best_name and second_overlap >= 0.2 * hotspot.length:
+            names.append(second_name)
+    return " / ".join(names)
+
+
+def hotspot_rows(result: AnalysisResult, lang: str = "en") -> List[Dict[str, object]]:
+    """Rows for the hotspot table shared by the GUI, Markdown and PDF output."""
+    del lang  # formatting is language independent; headers are not
+    rows: List[Dict[str, object]] = []
+    for index, hs in enumerate(result.hotspots, start=1):
+        rows.append(
+            {
+                "index": index,
+                "start": hs.start,
+                "end": hs.end,
+                "coords": f"{hs.start:,}–{hs.end:,}",
+                "length": hs.length,
+                "ident_ungapped": round(hs.ident, 2),
+                "ident_with_gaps": round(hs.ident_with_gaps, 2),
+                "indel": f"{hs.gap_frac:.1f} / {hs.indel_bp_pct:.1f}",
+                "indel_gap_pct": round(hs.gap_frac, 2),
+                "indel_bp_pct": round(hs.indel_bp_pct, 2),
+                "indel_bp": hs.indel_bp,
+                "region": hotspot_region(result, hs),
+            }
+        )
+    return rows
 
 
 def window_rows(result: AnalysisResult) -> List[Dict[str, object]]:
@@ -1247,6 +1380,179 @@ def write_windows_tsv(result: AnalysisResult, path: str) -> None:
             handle.write("\t".join(str(r[c]) for c in cols) + "\n")
 
 
+def hotspot_context(result: AnalysisResult, opts, lang: str = "en") -> str:
+    aln = result.alignment
+    names = f"{aln.names[0]} vs {aln.names[1] if aln.nseq > 1 else ''}"
+    span = result.coord_max - result.coord_min + 1
+    if lang == "zh":
+        return (
+            f"{names} ｜ 窗口 {opts.window} bp / 步长 {opts.step} bp ｜ "
+            f"比较区间 {result.coord_min:,}–{result.coord_max:,}（{span:,} bp）｜ "
+            f"一致度 {result.identity_ungapped:.1f}% ｜ 基因来源 {result.feature_source}"
+        )
+    return (
+        f"{names} | window {opts.window} bp / step {opts.step} bp | "
+        f"compared {result.coord_min:,}-{result.coord_max:,} ({span:,} bp) | "
+        f"identity {result.identity_ungapped:.1f}% | genes: {result.feature_source}"
+    )
+
+
+def write_hotspot_markdown(result: AnalysisResult, path: str, opts, lang: str = "en") -> None:
+    headers = HOTSPOT_TABLE_HEADERS.get(lang, HOTSPOT_TABLE_HEADERS["en"])
+    rows = hotspot_rows(result, lang)
+    aln = result.alignment
+    title = "低保守区" if lang == "zh" else "Low-conservation regions"
+    lines: List[str] = [f"# {title}", ""]
+    lines.append(f"- " + ("比对" if lang == "zh" else "Alignment") + f": `{aln.names[0]}` vs `{aln.names[1] if aln.nseq > 1 else ''}`")
+    lines.append(
+        f"- " + ("坐标序列" if lang == "zh" else "Coordinate sequence")
+        + f": `{aln.names[result.coords_seq]}`"
+    )
+    lines.append(
+        f"- " + ("比较区间" if lang == "zh" else "Compared region")
+        + f": {result.coord_min:,}–{result.coord_max:,} "
+        f"({result.coord_max - result.coord_min + 1:,} bp)"
+    )
+    lines.append(
+        f"- " + ("窗口 / 步长" if lang == "zh" else "Window / step")
+        + f": {opts.window} bp / {opts.step} bp"
+    )
+    lines.append(
+        f"- " + ("总体一致度" if lang == "zh" else "Overall identity")
+        + f": {result.identity_ungapped:.1f}% "
+        + ("(不计 gap)" if lang == "zh" else "(gap-free)")
+    )
+    lines.append(
+        f"- " + ("基因来源" if lang == "zh" else "Gene source") + f": {result.feature_source}"
+    )
+    lines.append("")
+    lines.append("| " + " | ".join(headers) + " |")
+    lines.append("|" + "|".join(["---"] * len(headers)) + "|")
+    if rows:
+        for row in rows:
+            cells = [
+                str(row["index"]),
+                row["coords"],
+                str(row["length"]),
+                f"{row['ident_ungapped']:.2f}",
+                f"{row['ident_with_gaps']:.2f}",
+                str(row["indel"]),
+                str(row["region"]),
+            ]
+            lines.append("| " + " | ".join(cells) + " |")
+    else:
+        lines.append("| " + " | ".join(["—"] * len(headers)) + " |")
+    lines.append("")
+    lines.append(HOTSPOT_TABLE_NOTE.get(lang, HOTSPOT_TABLE_NOTE["en"]))
+    lines.append("")
+    lines.append(
+        "```bash\n"
+        f"python align_conservation_plot.py -i <alignment> -o <figure.svg> "
+        f"--coords-seq {result.coords_seq + 1} --window {opts.window} --step {opts.step}\n"
+        "```"
+    )
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
+
+
+def build_hotspot_table_figures(
+    result: AnalysisResult, opts, lang: str = "en", rows_per_page: int = 32
+) -> List["object"]:
+    """Render the hotspot table as one or more matplotlib pages."""
+    from matplotlib.figure import Figure
+
+    headers = HOTSPOT_TABLE_HEADERS.get(lang, HOTSPOT_TABLE_HEADERS["en"])
+    rows = hotspot_rows(result, lang)
+    heading = "低保守区一览" if lang == "zh" else "Low-conservation regions"
+    subtitle = hotspot_context(result, opts, lang)
+    note = HOTSPOT_TABLE_NOTE.get(lang, HOTSPOT_TABLE_NOTE["en"])
+
+    pages: List["object"] = []
+    chunks = [rows[i : i + rows_per_page] for i in range(0, len(rows), rows_per_page)] or [[]]
+    for page_index, chunk in enumerate(chunks, start=1):
+        fig = Figure(figsize=(11.0, 6.6), dpi=opts.dpi, layout="constrained")
+        ax = fig.add_subplot(111)
+        ax.axis("off")
+        title = heading if len(chunks) == 1 else f"{heading} ({page_index}/{len(chunks)})"
+        ax.set_title(title, loc="left", fontsize=13, fontweight="bold", pad=14)
+        ax.text(
+            0.0, 1.0, subtitle, transform=ax.transAxes, fontsize=7.5, color="#555",
+            va="bottom", ha="left",
+        )
+
+        table_rows = [list(headers)] + [
+            [
+                str(r["index"]),
+                str(r["coords"]),
+                str(r["length"]),
+                f"{r['ident_ungapped']:.2f}",
+                f"{r['ident_with_gaps']:.2f}",
+                str(r["indel"]),
+                str(r["region"]),
+            ]
+            for r in chunk
+        ]
+        if not chunk:
+            table_rows.append(["—"] * len(headers))
+
+        n_rows = len(table_rows)
+        row_h = min(0.075, 0.78 / n_rows)
+        table_h = row_h * n_rows
+        table = ax.table(
+            cellText=table_rows[1:],
+            colLabels=table_rows[0],
+            cellLoc="center",
+            colLoc="center",
+            bbox=[0.0, 0.90 - table_h, 1.0, table_h],
+        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(8.5 if n_rows > 12 else 9.5)
+        col_widths = [0.06, 0.15, 0.10, 0.17, 0.17, 0.20, 0.15]
+        for (row_idx, col_idx), cell in table.get_celld().items():
+            cell.set_edgecolor("#cccccc")
+            if col_idx < len(col_widths):
+                cell.set_width(col_widths[col_idx])
+            if row_idx == 0:
+                cell.set_facecolor("#eef3f8")
+                cell.set_text_props(fontweight="bold", fontsize=8.5)
+            elif row_idx % 2 == 0:
+                cell.set_facecolor("#fafafa")
+
+        ax.text(0.0, 0.02, note, transform=ax.transAxes, fontsize=7, color="#666", va="bottom")
+        pages.append(fig)
+    return pages
+
+
+def save_pdf_bundle(
+    fig: "object",
+    result: AnalysisResult,
+    opts,
+    path: str,
+    include_figure: bool = True,
+    include_table: bool = True,
+    rows_per_page: int = 32,
+    lang: Optional[str] = None,
+) -> int:
+    """Write a PDF with the figure first and the hotspot table on later pages.
+
+    Returns the number of pages written.
+    """
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    pages = 0
+    with PdfPages(path) as pdf:
+        if include_figure and fig is not None:
+            pdf.savefig(fig, bbox_inches="tight")
+            pages += 1
+        if include_table:
+            for table_fig in build_hotspot_table_figures(
+                result, opts, lang or getattr(opts, "lang", "en"), rows_per_page
+            ):
+                pdf.savefig(table_fig, bbox_inches="tight")
+                pages += 1
+    return pages
+
+
 def summary_dict(result: AnalysisResult, opts) -> Dict[str, object]:
     aln = result.alignment
     return {
@@ -1277,13 +1583,19 @@ def summary_dict(result: AnalysisResult, opts) -> Dict[str, object]:
         ],
         "hotspots": [
             {
-                "start": h.start,
-                "end": h.end,
-                "identity_pct": round(h.ident, 2),
-                "gap_pct": round(h.gap_frac, 2),
+                "index": row["index"],
+                "start": row["start"],
+                "end": row["end"],
+                "length": row["length"],
+                "identity_pct": row["ident_ungapped"],
+                "identity_with_gaps_pct": row["ident_with_gaps"],
+                "gap_pct": row["indel_gap_pct"],
+                "indel_bp": row["indel_bp"],
+                "indel_bp_pct": row["indel_bp_pct"],
+                "region": row["region"],
                 "columns": h.ncols,
             }
-            for h in result.hotspots
+            for row, h in zip(hotspot_rows(result, getattr(opts, "lang", "en")), result.hotspots)
         ],
         "annotation_source": result.feature_source,
         "features": [
@@ -1325,7 +1637,9 @@ def print_report(result: AnalysisResult, opts) -> None:
         for i, h in enumerate(result.hotspots[: opts.top], start=1):
             print(
                 f"  {i:2d}. {h.start:>7,}-{h.end:<7,}  {h.end - h.start + 1:>5,} bp  "
-                f"identity {h.ident:5.1f}%  gap {h.gap_frac:5.1f}%"
+                f"identity {h.ident:5.1f}% (with gaps {h.ident_with_gaps:5.1f}%)  "
+                f"indel {h.gap_frac:4.1f}%/{h.indel_bp_pct:4.1f}%  "
+                f"{hotspot_region(result, h)}"
             )
     conserved = sorted(
         [w for w in result.windows if not math.isnan(w.ident_ungapped) and w.ncols >= opts.window * 0.5],
@@ -1392,6 +1706,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dpi", type=int, default=300, help="raster/export resolution")
     p.add_argument("--stats-out", help="write per-window statistics TSV")
     p.add_argument("--summary-out", help="write JSON summary")
+    p.add_argument("--hotspot-table-md", help="write the low-conservation table as Markdown")
+    p.add_argument(
+        "--pdf-with-table",
+        action="store_true",
+        help="append the hotspot table pages to the PDF (figure stays on page 1)",
+    )
     p.add_argument("--top", type=int, default=10, help="number of hotspots to print")
     p.add_argument("--gui", action="store_true", help="launch the Tkinter GUI")
     p.add_argument("--version", action="version", version="align_conservation_plot 1.0")
@@ -1407,8 +1727,15 @@ def render_and_save(result: AnalysisResult, opts, svg_path: Optional[str] = None
         fig.savefig(svg_path, format="svg", bbox_inches="tight")
     if opts.pdf is not None:
         pdf_path = opts.pdf or os.path.splitext(svg_path or "figure")[0] + ".pdf"
-        fig.savefig(pdf_path, format="pdf", bbox_inches="tight")
-        print(f"PDF written: {pdf_path}")
+        pages = save_pdf_bundle(
+            fig,
+            result,
+            opts,
+            pdf_path,
+            include_figure=True,
+            include_table=bool(getattr(opts, "pdf_with_table", False)),
+        )
+        print(f"PDF written: {pdf_path} ({pages} page{'s' if pages != 1 else ''})")
     if opts.png is not None:
         png_path = opts.png or os.path.splitext(svg_path or "figure")[0] + ".png"
         fig.savefig(png_path, format="png", dpi=opts.dpi, bbox_inches="tight")
@@ -1471,6 +1798,9 @@ def _run_cli_inner(args, out: str) -> int:
         with open(args.summary_out, "w", encoding="utf-8") as handle:
             json.dump(summary_dict(result, args), handle, ensure_ascii=False, indent=2)
         print(f"summary: {args.summary_out}")
+    if args.hotspot_table_md:
+        write_hotspot_markdown(result, args.hotspot_table_md, args, args.lang)
+        print(f"hotspot table: {args.hotspot_table_md}")
     return 0
 
 
@@ -1479,17 +1809,142 @@ def _run_cli_inner(args, out: str) -> int:
 # --------------------------------------------------------------------------
 
 
-def launch_gui() -> int:
+GUI_TEXT = {
+    "zh": {
+        "app_title": "比对保守度可视化",
+        "sec_input": "输入",
+        "lbl_input": "比对文件",
+        "btn_browse": "浏览…",
+        "lbl_annotation": "注释文件或 accession（可空）",
+        "hint_annotation": "留空则自动预测 ORF；也可直接填 NCBI Accession No.（形如 NC_004718.3）联网下载（结果会缓存）",
+        "sec_params": "参数",
+        "lbl_coords": "坐标参考序列 (1-based)",
+        "lbl_window": "窗口大小 (bp)",
+        "lbl_step": "步长 (bp)",
+        "lbl_indel_min": "插入或删除 阈值 (bp)",
+        "lbl_hotspot_k": "热点 k (MAD)",
+        "lbl_hotspot_pct": "热点百分位 (空=用 k)",
+        "lbl_title": "标题（可空）",
+        "chk_trim": "剔除两端全 gap 列",
+        "lbl_fig_lang": "图内文字：",
+        "lang_zh": "中文",
+        "lang_en": "English",
+        "btn_switch_lang": "Switch to English",
+        "sec_export": "导出内容",
+        "chk_data": "数据（窗口统计）",
+        "lbl_data_format": "格式",
+        "chk_svg": "图 SVG",
+        "chk_png": "图 PNG",
+        "lbl_dpi": "DPI",
+        "chk_md": "低保守区表 Markdown",
+        "chk_pdf": "PDF",
+        "chk_pdf_fig": "图",
+        "chk_pdf_table": "表",
+        "btn_export": "一键导出…",
+        "btn_draw": "绘图",
+        "tab_figure": "图",
+        "tab_table": "表",
+        "placeholder": "请选择比对文件后点击「绘图」",
+        "status_ready": "就绪",
+        "status_running": "正在解析并计算…",
+        "status_done": "完成：{nseq} 条序列，{cols:,} 列，一致度 {ident:.1f}%，热点 {hotspots} 处",
+        "status_failed": "失败：{msg}",
+        "status_exported": "已导出 {count} 个文件到 {path}",
+        "msg_missing_title": "缺少输入",
+        "msg_missing_body": "请先选择一个存在的比对文件。",
+        "msg_param_title": "参数错误",
+        "msg_error_title": "绘图失败",
+        "msg_export_failed_title": "导出失败",
+        "msg_export_title": "导出",
+        "msg_export_none": "请至少勾选一项导出内容。",
+        "msg_export_no_result": "请先点击「绘图」生成结果。",
+        "msg_dpi_invalid": "DPI 必须是 72–1200 之间的整数。",
+        "msg_dir_title": "选择导出目录",
+        "msg_export_done_title": "导出完成",
+        "msg_export_done_body": "已写入以下文件：",
+        "dialog_pick_input": "选择比对文件",
+        "dialog_pick_annotation": "选择注释文件",
+        "dialog_files_all": "所有文件",
+        "table_empty": "尚未生成结果",
+        "tree_header_index": "序号",
+        "tree_header_region": "所在区域",
+    },
+    "en": {
+        "app_title": "Alignment Conservation Plot",
+        "sec_input": "Input",
+        "lbl_input": "Alignment file",
+        "btn_browse": "Browse…",
+        "lbl_annotation": "Annotation file or accession (optional)",
+        "hint_annotation": "Leave empty to predict ORFs; you may also paste an NCBI accession (e.g. NC_004718.3) to download it (cached).",
+        "sec_params": "Parameters",
+        "lbl_coords": "Coordinate sequence (1-based)",
+        "lbl_window": "Window size (bp)",
+        "lbl_step": "Step (bp)",
+        "lbl_indel_min": "Indel threshold (bp)",
+        "lbl_hotspot_k": "Hotspot k (MAD)",
+        "lbl_hotspot_pct": "Hotspot percentile (empty = k)",
+        "lbl_title": "Title (optional)",
+        "chk_trim": "Trim terminal all-gap columns",
+        "lbl_fig_lang": "Figure text:",
+        "lang_zh": "中文",
+        "lang_en": "English",
+        "btn_switch_lang": "切换到中文",
+        "sec_export": "Export",
+        "chk_data": "Data (window statistics)",
+        "lbl_data_format": "Format",
+        "chk_svg": "Figure SVG",
+        "chk_png": "Figure PNG",
+        "lbl_dpi": "DPI",
+        "chk_md": "Hotspot table Markdown",
+        "chk_pdf": "PDF",
+        "chk_pdf_fig": "figure",
+        "chk_pdf_table": "table",
+        "btn_export": "Export selected…",
+        "btn_draw": "Plot",
+        "tab_figure": "Figure",
+        "tab_table": "Table",
+        "placeholder": "Choose an alignment file, then click Plot.",
+        "status_ready": "Ready",
+        "status_running": "Parsing and computing…",
+        "status_done": "Done: {nseq} sequences, {cols:,} columns, identity {ident:.1f}%, {hotspots} hotspots",
+        "status_failed": "Failed: {msg}",
+        "status_exported": "Exported {count} file(s) to {path}",
+        "msg_missing_title": "Missing input",
+        "msg_missing_body": "Please choose an existing alignment file first.",
+        "msg_param_title": "Invalid parameters",
+        "msg_error_title": "Plot failed",
+        "msg_export_failed_title": "Export failed",
+        "msg_export_title": "Export",
+        "msg_export_none": "Select at least one export option.",
+        "msg_export_no_result": "Click Plot before exporting.",
+        "msg_dpi_invalid": "DPI must be an integer between 72 and 1200.",
+        "msg_dir_title": "Choose export folder",
+        "msg_export_done_title": "Export complete",
+        "msg_export_done_body": "Files written:",
+        "dialog_pick_input": "Choose alignment file",
+        "dialog_pick_annotation": "Choose annotation file",
+        "dialog_files_all": "All files",
+        "table_empty": "No result yet",
+        "tree_header_index": "#",
+        "tree_header_region": "Region",
+    },
+}
+
+
+def launch_gui(self_test: Optional[callable] = None) -> int:
+    import queue
+    import threading
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
     from tkinter import font as tkfont
 
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
     configure_matplotlib("zh")
-    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
     root = tk.Tk()
-    root.title("Alignment Conservation Plot")
-    root.geometry("1280x820")
+    root.geometry("1300x860")
+    root.minsize(1100, 760)
     try:
         tkfont.nametofont("TkDefaultFont").configure(family="PingFang SC", size=12)
         tkfont.nametofont("TkTextFont").configure(family="PingFang SC", size=12)
@@ -1509,112 +1964,306 @@ def launch_gui() -> int:
         "title": tk.StringVar(),
         "lang": tk.StringVar(value="zh"),
         "trim": tk.BooleanVar(value=True),
+        "exp_data": tk.BooleanVar(value=True),
+        "exp_data_format": tk.StringVar(value="TSV"),
+        "exp_svg": tk.BooleanVar(value=True),
+        "exp_png": tk.BooleanVar(value=False),
+        "exp_md": tk.BooleanVar(value=True),
+        "exp_pdf_fig": tk.BooleanVar(value=False),
+        "exp_pdf_table": tk.BooleanVar(value=False),
+        "png_dpi": tk.StringVar(value="300"),
     }
+    gui_lang = {"value": "zh"}
+    task_queue: "queue.Queue[tuple]" = queue.Queue()
+    registry: List[Tuple[object, str, str]] = []
+    app = {"fig": None, "result": None, "args": None, "canvas": None, "toolbar": None}
 
-    left = ttk.Frame(root, padding=(12, 12, 8, 12))
+    def text(key: str) -> str:
+        return GUI_TEXT[gui_lang["value"]].get(key, key)
+
+    def register(widget, key: str, attr: str = "text"):
+        registry.append((widget, key, attr))
+        try:
+            widget.configure(**{attr: text(key)})
+        except tk.TclError:
+            pass
+
+    left = ttk.Frame(root, padding=(10, 10, 6, 8))
     left.pack(side="left", fill="y")
+    left.grid_columnconfigure(0, minsize=175)
     right = ttk.Frame(root, padding=(4, 8, 8, 8))
     right.pack(side="right", fill="both", expand=True)
 
-    def labelled_entry(parent, row, text, var, width=28):
-        ttk.Label(parent, text=text).grid(row=row, column=0, sticky="w", pady=3)
-        entry = ttk.Entry(parent, textvariable=var, width=width)
-        entry.grid(row=row, column=1, columnspan=2, sticky="we", pady=3)
-        return entry
-
     row = 0
-    ttk.Label(left, text="比对文件", font=("PingFang SC", 12, "bold")).grid(row=row, column=0, columnspan=3, sticky="w")
+    header = ttk.Frame(left)
+    header.grid(row=row, column=0, columnspan=3, sticky="we", pady=(0, 2))
+    title_label = ttk.Label(header, font=("PingFang SC", 14, "bold"))
+    title_label.pack(side="left")
+    register(title_label, "app_title")
+    switch_btn = ttk.Button(header, width=16)
+    switch_btn.pack(side="right")
+    register(switch_btn, "btn_switch_lang")
     row += 1
-    entry_in = ttk.Entry(left, textvariable=state["input"], width=34)
-    entry_in.grid(row=row, column=0, columnspan=2, sticky="we", pady=3)
+
+    sec_input = ttk.Label(left, font=("PingFang SC", 11, "bold"))
+    sec_input.grid(row=row, column=0, columnspan=3, sticky="w", pady=(4, 2))
+    register(sec_input, "sec_input")
+    row += 1
+
+    lbl_input = ttk.Label(left, anchor="w")
+    lbl_input.grid(row=row, column=0, columnspan=3, sticky="w")
+    register(lbl_input, "lbl_input")
+    row += 1
+    ttk.Entry(left, textvariable=state["input"], width=26).grid(
+        row=row, column=0, columnspan=2, sticky="we", pady=3
+    )
 
     def pick_input():
         path = filedialog.askopenfilename(
-            title="选择比对文件",
+            title=text("dialog_pick_input"),
             filetypes=[
                 ("Alignment", "*.srspair *.pair *.aln *.fasta *.fa *.fas *.sto *.phy *.msf *.nex *.gz"),
-                ("All files", "*.*"),
+                (text("dialog_files_all"), "*.*"),
             ],
         )
         if path:
             state["input"].set(path)
 
-    ttk.Button(left, text="浏览…", command=pick_input, width=8).grid(row=row, column=2, padx=(4, 0))
+    browse_in = ttk.Button(left, width=8, command=pick_input)
+    browse_in.grid(row=row, column=2, padx=(4, 0))
+    register(browse_in, "btn_browse")
     row += 1
 
-    ttk.Label(left, text="注释文件或 accession（可空）").grid(
-        row=row, column=0, columnspan=3, sticky="w", pady=(10, 0)
-    )
+    lbl_annotation = ttk.Label(left, anchor="w")
+    lbl_annotation.grid(row=row, column=0, columnspan=3, sticky="w", pady=(8, 0))
+    register(lbl_annotation, "lbl_annotation")
     row += 1
-    ttk.Entry(left, textvariable=state["annotation"], width=34).grid(row=row, column=0, columnspan=2, sticky="we", pady=3)
+    ttk.Entry(left, textvariable=state["annotation"], width=26).grid(
+        row=row, column=0, columnspan=2, sticky="we", pady=3
+    )
 
     def pick_annotation():
         path = filedialog.askopenfilename(
-            title="选择注释文件",
-            filetypes=[("Annotation", "*.gb *.gbk *.genbank *.gff *.gff3 *.tsv *.txt"), ("All files", "*.*")],
+            title=text("dialog_pick_annotation"),
+            filetypes=[
+                ("Annotation", "*.gb *.gbk *.genbank *.gff *.gff3 *.tsv *.txt"),
+                (text("dialog_files_all"), "*.*"),
+            ],
         )
         if path:
             state["annotation"].set(path)
 
-    ttk.Button(left, text="浏览…", command=pick_annotation, width=8).grid(row=row, column=2, padx=(4, 0))
+    browse_ann = ttk.Button(left, width=8, command=pick_annotation)
+    browse_ann.grid(row=row, column=2, padx=(4, 0))
+    register(browse_ann, "btn_browse")
     row += 1
-    ttk.Label(
-        left,
-        text="留空则自动预测 ORF；也可直接填 NCBI Accession No.（形如 NC_004718.3）联网下载（结果会缓存）",
-        foreground="#777",
-        wraplength=330,
-        font=("PingFang SC", 10),
-    ).grid(row=row, column=0, columnspan=3, sticky="w")
+    hint = ttk.Label(left, foreground="#777", wraplength=300, font=("PingFang SC", 9))
+    hint.grid(row=row, column=0, columnspan=3, sticky="w")
+    register(hint, "hint_annotation")
     row += 1
 
-    ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=10)
+    ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
     row += 1
-    ttk.Label(left, text="参数", font=("PingFang SC", 12, "bold")).grid(row=row, column=0, columnspan=3, sticky="w")
+    sec_params = ttk.Label(left, font=("PingFang SC", 11, "bold"))
+    sec_params.grid(row=row, column=0, columnspan=3, sticky="w")
+    register(sec_params, "sec_params")
     row += 1
 
-    labelled_entry(left, row, "坐标参考序列 (1-based)", state["coords_seq"], width=12); row += 1
-    labelled_entry(left, row, "窗口大小 (bp)", state["window"], width=12); row += 1
-    labelled_entry(left, row, "步长 (bp)", state["step"], width=12); row += 1
-    labelled_entry(left, row, "indel 阈值 (bp)", state["indel_min"], width=12); row += 1
-    labelled_entry(left, row, "热点 k (MAD)", state["hotspot_k"], width=12); row += 1
-    labelled_entry(left, row, "热点百分位 (空=用 k)", state["hotspot_pct"], width=12); row += 1
-    labelled_entry(left, row, "标题（可空）", state["title"], width=28); row += 1
+    def labelled_entry(parent, row_index, key, var, width=12):
+        label = ttk.Label(parent, anchor="w")
+        label.grid(row=row_index, column=0, sticky="w", pady=1)
+        register(label, key)
+        ttk.Entry(parent, textvariable=var, width=width).grid(
+            row=row_index, column=1, columnspan=2, sticky="we", pady=1
+        )
 
-    ttk.Checkbutton(left, text="剔除两端全 gap 列", variable=state["trim"]).grid(
-        row=row, column=0, columnspan=3, sticky="w", pady=3
+    for key, var in (
+        ("lbl_coords", state["coords_seq"]),
+        ("lbl_window", state["window"]),
+        ("lbl_step", state["step"]),
+        ("lbl_indel_min", state["indel_min"]),
+        ("lbl_hotspot_k", state["hotspot_k"]),
+        ("lbl_hotspot_pct", state["hotspot_pct"]),
+    ):
+        labelled_entry(left, row, key, var)
+        row += 1
+    labelled_entry(left, row, "lbl_title", state["title"], width=26)
+    row += 1
+
+    trim_chk = ttk.Checkbutton(left, variable=state["trim"])
+    trim_chk.grid(row=row, column=0, columnspan=3, sticky="w", pady=1)
+    register(trim_chk, "chk_trim")
+    row += 1
+
+    lang_row = ttk.Frame(left)
+    lang_row.grid(row=row, column=0, columnspan=3, sticky="w", pady=1)
+    fig_lang_label = ttk.Label(lang_row)
+    fig_lang_label.pack(side="left")
+    register(fig_lang_label, "lbl_fig_lang")
+    for value, key in (("zh", "lang_zh"), ("en", "lang_en")):
+        rb = ttk.Radiobutton(lang_row, value=value, variable=state["lang"])
+        rb.pack(side="left")
+        register(rb, key)
+    row += 1
+
+    ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
+    row += 1
+    sec_export = ttk.Label(left, font=("PingFang SC", 11, "bold"))
+    sec_export.grid(row=row, column=0, columnspan=3, sticky="w")
+    register(sec_export, "sec_export")
+    row += 1
+
+    data_row = ttk.Frame(left)
+    data_row.grid(row=row, column=0, columnspan=3, sticky="w")
+    data_chk = ttk.Checkbutton(data_row, variable=state["exp_data"])
+    data_chk.pack(side="left")
+    register(data_chk, "chk_data")
+    fmt_label = ttk.Label(data_row)
+    fmt_label.pack(side="left", padx=(8, 2))
+    register(fmt_label, "lbl_data_format")
+    fmt_box = ttk.Combobox(
+        data_row, textvariable=state["exp_data_format"], values=("TSV", "JSON"), width=6, state="readonly"
     )
-    row += 1
-    lang_frame = ttk.Frame(left)
-    lang_frame.grid(row=row, column=0, columnspan=3, sticky="w", pady=3)
-    ttk.Label(lang_frame, text="图内文字：").pack(side="left")
-    ttk.Radiobutton(lang_frame, text="中文", value="zh", variable=state["lang"]).pack(side="left")
-    ttk.Radiobutton(lang_frame, text="English", value="en", variable=state["lang"]).pack(side="left")
+    fmt_box.pack(side="left")
     row += 1
 
-    ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=10)
+    svg_chk = ttk.Checkbutton(left, variable=state["exp_svg"])
+    svg_chk.grid(row=row, column=0, columnspan=3, sticky="w")
+    register(svg_chk, "chk_svg")
     row += 1
-    status = tk.StringVar(value="就绪")
-    buttons = ttk.Frame(left)
-    buttons.grid(row=row, column=0, columnspan=3, sticky="we", pady=(2, 6))
-    draw_btn = ttk.Button(buttons, text="绘图", width=10)
+
+    png_row = ttk.Frame(left)
+    png_row.grid(row=row, column=0, columnspan=3, sticky="w")
+    png_chk = ttk.Checkbutton(png_row, variable=state["exp_png"])
+    png_chk.pack(side="left")
+    register(png_chk, "chk_png")
+    dpi_label = ttk.Label(png_row)
+    dpi_label.pack(side="left", padx=(8, 2))
+    register(dpi_label, "lbl_dpi")
+    ttk.Entry(png_row, textvariable=state["png_dpi"], width=6).pack(side="left")
+    row += 1
+
+    md_chk = ttk.Checkbutton(left, variable=state["exp_md"])
+    md_chk.grid(row=row, column=0, columnspan=3, sticky="w")
+    register(md_chk, "chk_md")
+    row += 1
+
+    pdf_row = ttk.Frame(left)
+    pdf_row.grid(row=row, column=0, columnspan=3, sticky="w")
+    pdf_label = ttk.Label(pdf_row)
+    pdf_label.pack(side="left")
+    register(pdf_label, "chk_pdf")
+    for var, key in ((state["exp_pdf_fig"], "chk_pdf_fig"), (state["exp_pdf_table"], "chk_pdf_table")):
+        sub = ttk.Checkbutton(pdf_row, variable=var)
+        sub.pack(side="left", padx=(8, 0))
+        register(sub, key)
+    row += 1
+
+    ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
+    row += 1
+
+    status = tk.StringVar(value=text("status_ready"))
+    action_row = ttk.Frame(left)
+    action_row.grid(row=row, column=0, columnspan=3, sticky="we", pady=(0, 4))
+    draw_btn = ttk.Button(action_row, width=10)
     draw_btn.pack(side="left")
-    export_svg = ttk.Button(buttons, text="导出 SVG", width=11, state="disabled")
-    export_svg.pack(side="left", padx=4)
-    export_pdf = ttk.Button(buttons, text="导出 PDF", width=11, state="disabled")
-    export_pdf.pack(side="left", padx=4)
-    export_data = ttk.Button(buttons, text="导出数据", width=11, state="disabled")
-    export_data.pack(side="left", padx=4)
+    register(draw_btn, "btn_draw")
+    export_btn = ttk.Button(action_row, width=14, state="disabled")
+    export_btn.pack(side="left", padx=6)
+    register(export_btn, "btn_export")
     row += 1
-    ttk.Label(left, textvariable=status, foreground="#555", wraplength=340).grid(
-        row=row, column=0, columnspan=3, sticky="w"
-    )
+    status_label = ttk.Label(left, textvariable=status, foreground="#555", wraplength=340)
+    status_label.grid(row=row, column=0, columnspan=3, sticky="w")
 
-    holder = ttk.Frame(right)
-    holder.pack(fill="both", expand=True)
-    placeholder = ttk.Label(holder, text="请选择比对文件后点击「绘图」", foreground="#888")
+    notebook = ttk.Notebook(right)
+    notebook.pack(fill="both", expand=True)
+    tab_figure = ttk.Frame(notebook)
+    tab_table = ttk.Frame(notebook)
+    notebook.add(tab_figure, text=text("tab_figure"))
+    notebook.add(tab_table, text=text("tab_table"))
+
+    placeholder = ttk.Label(tab_figure, foreground="#888")
     placeholder.pack(expand=True)
+    register(placeholder, "placeholder")
 
-    app = {"fig": None, "result": None, "canvas": None, "toolbar": None}
+    table_holder = ttk.Frame(tab_table)
+    table_holder.pack(fill="both", expand=True, padx=6, pady=6)
+    tree = ttk.Treeview(
+        table_holder, columns=HOTSPOT_TABLE_COLUMNS, show="headings", selectmode="browse"
+    )
+    tree_scroll = ttk.Scrollbar(table_holder, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=tree_scroll.set)
+    tree.pack(side="left", fill="both", expand=True)
+    tree_scroll.pack(side="right", fill="y")
+    widths = {"index": 45, "coords": 130, "length": 80, "ident_ungapped": 115,
+              "ident_with_gaps": 115, "indel": 175, "region": 120}
+    for col in HOTSPOT_TABLE_COLUMNS:
+        tree.column(col, width=widths.get(col, 120), anchor="center", stretch=True)
+    table_note = ttk.Label(tab_table, foreground="#666", wraplength=760, font=("PingFang SC", 10))
+    table_note.pack(fill="x", padx=8, pady=(0, 8))
+    empty_label = ttk.Label(tab_table, foreground="#888")
+    register(empty_label, "table_empty")
+
+    def table_lang() -> str:
+        return gui_lang["value"]
+
+    def refresh_table_headers():
+        headers = HOTSPOT_TABLE_HEADERS.get(table_lang(), HOTSPOT_TABLE_HEADERS["en"])
+        for col, header in zip(HOTSPOT_TABLE_COLUMNS, headers):
+            tree.heading(col, text=header)
+        table_note.configure(text=HOTSPOT_TABLE_NOTE.get(table_lang(), HOTSPOT_TABLE_NOTE["en"]))
+
+    def refresh_table_rows():
+        tree.delete(*tree.get_children())
+        result = app["result"]
+        if result is None:
+            empty_label.pack(expand=True)
+            return
+        empty_label.pack_forget()
+        for row_data in hotspot_rows(result, table_lang()):
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    row_data["index"],
+                    row_data["coords"],
+                    f"{row_data['length']:,}",
+                    f"{row_data['ident_ungapped']:.2f}",
+                    f"{row_data['ident_with_gaps']:.2f}",
+                    row_data["indel"],
+                    row_data["region"],
+                ),
+            )
+
+    def apply_language():
+        for widget, key, attr in registry:
+            try:
+                widget.configure(**{attr: text(key)})
+            except tk.TclError:
+                pass
+        root.title(text("app_title"))
+        notebook.tab(0, text=text("tab_figure"))
+        notebook.tab(1, text=text("tab_table"))
+        switch_btn.configure(text=text("btn_switch_lang"))
+        refresh_table_headers()
+        refresh_table_rows()
+        if app["result"] is None:
+            status.set(text("status_ready"))
+        else:
+            status.set(
+                text("status_done").format(
+                    nseq=app["result"].alignment.nseq,
+                    cols=app["result"].core_columns,
+                    ident=app["result"].identity_ungapped,
+                    hotspots=len(app["result"].hotspots),
+                )
+            )
+
+    def toggle_language():
+        gui_lang["value"] = "en" if gui_lang["value"] == "zh" else "zh"
+        apply_language()
+
+    switch_btn.configure(command=toggle_language)
 
     def current_args():
         args = build_parser().parse_args([])
@@ -1633,20 +2282,22 @@ def launch_gui() -> int:
         args.dpi = 100
         args.figsize = None
         args.top = 10
+        args.pdf_with_table = True
         return args
 
     def draw():
         path = state["input"].get().strip()
         if not path or not os.path.exists(path):
-            messagebox.showwarning("缺少输入", "请先选择一个存在的比对文件。")
+            messagebox.showwarning(text("msg_missing_title"), text("msg_missing_body"))
             return
         try:
             args = current_args()
         except ValueError as exc:
-            messagebox.showerror("参数错误", str(exc))
+            messagebox.showerror(text("msg_param_title"), str(exc))
             return
         draw_btn.configure(state="disabled")
-        status.set("正在解析并计算…")
+        export_btn.configure(state="disabled")
+        status.set(text("status_running"))
 
         def worker():
             try:
@@ -1673,21 +2324,21 @@ def launch_gui() -> int:
                         "refresh": args.refresh_annotation,
                     },
                 )
-                root.after(0, lambda: finish(result, args, None))
+                task_queue.put(("ok", result, args))
             except Exception as exc:  # noqa: BLE001
                 err = "".join(traceback.format_exception_only(type(exc), exc)).strip()
-                root.after(0, lambda: fail(err))
-
-        import threading
+                task_queue.put(("error", err, None))
 
         threading.Thread(target=worker, daemon=True).start()
 
     def fail(message: str):
         draw_btn.configure(state="normal")
-        status.set("失败：" + message)
-        messagebox.showerror("绘图失败", message)
+        if app["result"] is not None:
+            export_btn.configure(state="normal")
+        status.set(text("status_failed").format(msg=message))
+        messagebox.showerror(text("msg_error_title"), message)
 
-    def finish(result, args, _unused):
+    def finish(result, args):
         try:
             configure_matplotlib(args.lang)
             fig = build_figure(result, args)
@@ -1696,74 +2347,152 @@ def launch_gui() -> int:
             return
         if app["canvas"] is not None:
             app["canvas"].get_tk_widget().destroy()
-        if app["toolbar"] is not None:
-            app["toolbar"].destroy()
-            app["toolbar"] = None
+            app["canvas"] = None
         placeholder.pack_forget()
-        canvas = FigureCanvasTkAgg(fig, master=holder)
+        canvas = FigureCanvasTkAgg(fig, master=tab_figure)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
         app["canvas"] = canvas
         app["fig"] = fig
         app["result"] = result
+        app["args"] = args
         draw_btn.configure(state="normal")
-        for btn in (export_svg, export_pdf, export_data):
-            btn.configure(state="normal")
+        export_btn.configure(state="normal")
+        refresh_table_headers()
+        refresh_table_rows()
         status.set(
-            f"完成：{result.alignment.nseq} 条序列，{result.core_columns:,} 列，"
-            f"一致度 {result.identity_ungapped:.1f}%，热点 {len(result.hotspots)} 处"
+            text("status_done").format(
+                nseq=result.alignment.nseq,
+                cols=result.core_columns,
+                ident=result.identity_ungapped,
+                hotspots=len(result.hotspots),
+            )
         )
 
-    def save_fig(fmt: str):
-        if app["fig"] is None:
-            return
-        default = os.path.splitext(os.path.basename(state["input"].get()))[0] + "_conservation." + fmt
-        path = filedialog.asksaveasfilename(
-            title=f"导出 {fmt.upper()}",
-            defaultextension="." + fmt,
-            initialfile=default,
-            filetypes=[(fmt.upper(), "*." + fmt)],
-        )
-        if not path:
-            return
+    def poll_tasks():
         try:
-            app["fig"].savefig(path, format=fmt, bbox_inches="tight", dpi=300)
-            status.set(f"已导出：{path}")
-        except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("导出失败", str(exc))
+            while True:
+                kind, payload, extra = task_queue.get_nowait()
+                if kind == "ok":
+                    finish(payload, extra)
+                else:
+                    fail(payload)
+        except queue.Empty:
+            pass
+        finally:
+            root.after(120, poll_tasks)
 
-    def save_data():
-        if app["result"] is None:
+    def do_export():
+        result = app["result"]
+        args = app["args"]
+        fig = app["fig"]
+        if result is None or args is None or fig is None:
+            messagebox.showwarning(text("msg_export_title"), text("msg_export_no_result"))
             return
-        base = os.path.splitext(os.path.basename(state["input"].get()))[0]
-        path = filedialog.asksaveasfilename(
-            title="导出窗口统计",
-            defaultextension=".tsv",
-            initialfile=base + "_windows.tsv",
-            filetypes=[("TSV", "*.tsv"), ("JSON", "*.json")],
+        want_pdf = state["exp_pdf_fig"].get() or state["exp_pdf_table"].get()
+        selected = any(
+            (
+                state["exp_data"].get(),
+                state["exp_svg"].get(),
+                state["exp_png"].get(),
+                state["exp_md"].get(),
+                want_pdf,
+            )
         )
-        if not path:
+        if not selected:
+            messagebox.showwarning(text("msg_export_title"), text("msg_export_none"))
             return
+        dpi = None
+        if state["exp_png"].get():
+            try:
+                dpi = int(state["png_dpi"].get().strip())
+            except ValueError:
+                messagebox.showerror(text("msg_export_title"), text("msg_dpi_invalid"))
+                return
+            if not 72 <= dpi <= 1200:
+                messagebox.showerror(text("msg_export_title"), text("msg_dpi_invalid"))
+                return
+        folder = filedialog.askdirectory(title=text("msg_dir_title"))
+        if not folder:
+            return
+        stem = os.path.splitext(os.path.basename(state["input"].get()))[0] or "alignment"
+        written: List[str] = []
         try:
-            args = current_args()
-            if path.lower().endswith(".json"):
-                with open(path, "w", encoding="utf-8") as handle:
-                    json.dump(summary_dict(app["result"], args), handle, ensure_ascii=False, indent=2)
-            else:
-                write_windows_tsv(app["result"], path)
-            status.set(f"已导出：{path}")
+            if state["exp_data"].get():
+                fmt = state["exp_data_format"].get().upper()
+                if fmt == "JSON":
+                    data_path = os.path.join(folder, f"{stem}_summary.json")
+                    with open(data_path, "w", encoding="utf-8") as handle:
+                        json.dump(summary_dict(result, args), handle, ensure_ascii=False, indent=2)
+                else:
+                    data_path = os.path.join(folder, f"{stem}_windows.tsv")
+                    write_windows_tsv(result, data_path)
+                written.append(data_path)
+            if state["exp_svg"].get():
+                svg_path = os.path.join(folder, f"{stem}_conservation.svg")
+                fig.savefig(svg_path, format="svg", bbox_inches="tight")
+                written.append(svg_path)
+            if state["exp_png"].get():
+                png_path = os.path.join(folder, f"{stem}_conservation.png")
+                fig.savefig(png_path, format="png", dpi=dpi, bbox_inches="tight")
+                written.append(png_path)
+            if state["exp_md"].get():
+                md_path = os.path.join(folder, f"{stem}_hotspots.md")
+                write_hotspot_markdown(result, md_path, args, table_lang())
+                written.append(md_path)
+            if want_pdf:
+                pdf_path = os.path.join(folder, f"{stem}_conservation.pdf")
+                save_pdf_bundle(
+                    fig,
+                    result,
+                    args,
+                    pdf_path,
+                    include_figure=state["exp_pdf_fig"].get(),
+                    include_table=state["exp_pdf_table"].get(),
+                    lang=table_lang(),
+                )
+                written.append(pdf_path)
         except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("导出失败", str(exc))
+            messagebox.showerror(text("msg_export_failed_title"), str(exc))
+            status.set(text("status_failed").format(msg=str(exc)))
+            return
+        status.set(text("status_exported").format(count=len(written), path=folder))
+        messagebox.showinfo(
+            text("msg_export_done_title"),
+            text("msg_export_done_body") + "\n\n" + "\n".join(written),
+        )
 
     draw_btn.configure(command=draw)
-    export_svg.configure(command=lambda: save_fig("svg"))
-    export_pdf.configure(command=lambda: save_fig("pdf"))
-    export_data.configure(command=save_data)
+    export_btn.configure(command=do_export)
 
     def on_close():
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
+    apply_language()
+    root.after(120, poll_tasks)
+
+    if self_test is not None:
+        self_test(
+            {
+                "root": root,
+                "app": app,
+                "state": state,
+                "tree": tree,
+                "notebook": notebook,
+                "status": status,
+                "current_args": current_args,
+                "draw": draw,
+                "finish": finish,
+                "do_export": do_export,
+                "apply_language": apply_language,
+                "toggle_language": toggle_language,
+                "gui_lang": gui_lang,
+            }
+        )
+        root.destroy()
+        return 0
+
     root.mainloop()
     return 0
 
