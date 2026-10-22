@@ -101,6 +101,8 @@ follows `--lang`.
 - The right pane has **Figure / Table** tabs; the table is the low-conservation
   overview whose indices match the numbered hotspots in the figure.
 - Computation runs on a background thread, so the window stays responsive.
+- Exports re-render at the standard figure size, so the output does not depend
+  on how large the preview window happens to be.
 
 ### Low-conservation table
 
@@ -147,11 +149,15 @@ until you plot again.**
 - **Identity (ungapped)** = matches / (matches + mismatches), computed only on
   columns where both sequences carry a base.
 - **Identity (with gaps)** = matches / all columns, gap columns in the denominator.
+- **Gap column**: a column where at least one sequence has a gap. For two
+  sequences this is the same as "either sequence has a gap"; with many
+  sequences it does not collapse to zero just because someone always has a base.
 - **Indel**: a stretch of at least `--indel-min` consecutive gaps in one
   sequence. The table's `Indel %` is `gap-column share / share of the region
   covered by indels at or above the threshold`.
 - **Multiple sequences**: per column, "identical pairs / informative pairs",
-  which equals the mean pairwise identity.
+  which equals the mean pairwise identity. The gapped denominator is therefore
+  `columns × sequence pairs`, not the column count alone.
 - **Terminal gaps**: leading/trailing columns where all sequences are gaps;
   trimmed by default and reported in the footer.
 - **Hotspots**: windows whose sliding identity is below

@@ -102,6 +102,7 @@ class Hotspot:
     mismatches: float = 0.0
     gaps: int = 0
     indel_bp: int = 0
+    pairs_per_column: int = 1
 
     @property
     def length(self) -> int:
@@ -109,8 +110,13 @@ class Hotspot:
 
     @property
     def ident_with_gaps(self) -> float:
-        """Identity when gap columns stay in the denominator."""
-        denom = self.ncols
+        """Identity when gap columns stay in the denominator.
+
+        ``matches`` counts identical sequence pairs, so a column contributes
+        ``pairs_per_column`` comparisons.  Without this factor the value is
+        inflated by n(n-1)/2 for multi-sequence alignments.
+        """
+        denom = self.ncols * max(1, self.pairs_per_column)
         return 100.0 * self.matches / denom if denom else 0.0
 
     @property
@@ -364,12 +370,15 @@ def analyse(
     core_slice = range(first_col, last_col + 1)
     pairs_per_column = aln.nseq * (aln.nseq - 1) // 2
 
+    def column_has_gap(i: int) -> bool:
+        return any(gap_mask[k][i] for k in range(aln.nseq))
+
     match_pairs = 0.0
     pair_total = 0.0
     gaps = 0
     for i in core_slice:
         same, total = column_pair_score(seqs, i)
-        if total == 0:
+        if column_has_gap(i):
             gaps += 1
         match_pairs += same
         pair_total += total
@@ -433,7 +442,7 @@ def analyse(
         wg = 0
         for i in cols:
             same, total = column_pair_score(seqs, i)
-            if total == 0:
+            if column_has_gap(i):
                 wg += 1
             wm += same
             wtot += total
@@ -483,7 +492,7 @@ def analyse(
             gap_cols = 0
             for i in cols:
                 same, total = column_pair_score(seqs, i)
-                if total == 0:
+                if column_has_gap(i):
                     gap_cols += 1
                 same_total += same
                 pair_total += total
@@ -510,6 +519,7 @@ def analyse(
                     mismatches=mm,
                     gaps=gp,
                     indel_bp=indel_bp,
+                    pairs_per_column=pairs_per_column,
                 )
             )
 
@@ -2417,6 +2427,13 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
             return
         stem = os.path.splitext(os.path.basename(state["input"].get()))[0] or "alignment"
         written: List[str] = []
+        # Export from a freshly built figure so the file size does not depend on
+        # how the preview canvas happened to be resized.
+        try:
+            export_fig = build_figure(result, args)
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror(text("msg_export_failed_title"), str(exc))
+            return
         try:
             if state["exp_data"].get():
                 fmt = state["exp_data_format"].get().upper()
@@ -2430,11 +2447,11 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
                 written.append(data_path)
             if state["exp_svg"].get():
                 svg_path = os.path.join(folder, f"{stem}_conservation.svg")
-                fig.savefig(svg_path, format="svg", bbox_inches="tight")
+                export_fig.savefig(svg_path, format="svg", bbox_inches="tight")
                 written.append(svg_path)
             if state["exp_png"].get():
                 png_path = os.path.join(folder, f"{stem}_conservation.png")
-                fig.savefig(png_path, format="png", dpi=dpi, bbox_inches="tight")
+                export_fig.savefig(png_path, format="png", dpi=dpi, bbox_inches="tight")
                 written.append(png_path)
             if state["exp_md"].get():
                 md_path = os.path.join(folder, f"{stem}_hotspots.md")
@@ -2443,7 +2460,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
             if want_pdf:
                 pdf_path = os.path.join(folder, f"{stem}_conservation.pdf")
                 save_pdf_bundle(
-                    fig,
+                    export_fig,
                     result,
                     args,
                     pdf_path,
