@@ -1,39 +1,44 @@
 # align-conservation-plot
 
-从比对文件生成「滑窗一致度 + gap 密度 + 基因轨道」的出版级图，输出 **SVG / PDF / PNG**。
-支持 EMBOSS `srspair` / `pair` 以及常见多序列比对格式，带 Tkinter GUI。
+[中文](README_zh.md) | **English**
+
+Turn an alignment into a publication-ready figure with a sliding-window identity
+curve, a gap-density track and a gene map. Exports **SVG / PDF / PNG**.
+Supports EMBOSS `srspair` / `pair` as well as common multiple-sequence alignment
+formats, and ships with a Tkinter GUI.
 
 ![example](examples/example.svg)
 
-## 为什么自己写
+## Why write another tool
 
-现成工具都差一块：
+Every existing tool is missing one piece:
 
-| 工具 | 能力 | 缺口 |
+| Tool | What it does | What is missing |
 |---|---|---|
-| EMBOSS `plotcon` | 滑窗保守度曲线，可输出 pdf/svg | 画的是替换矩阵相似度分数，不是 identity%；无 gap 轨道、无 indel 标记、无基因轨道 |
-| MSAexplorer | 多序列分析，读 gb/gff/bed，导 PDF | 无「按参考坐标的滑窗 identity + gap 密度」曲线；仅 PDF |
-| pyMSAviz / MSAplot | MSA 色块图 + seqlogo | 不做滑窗 identity 曲线 |
-| Jalview | 逐列保守度着色 | 不是按基因组坐标的滑窗图 |
-| dna_features_viewer | 基因轨道 | 仅轨道 |
+| EMBOSS `plotcon` | Sliding-window conservation curve, can write pdf/svg | Plots substitution-matrix similarity, not identity %; no gap track, no indel markers, no gene track |
+| MSAexplorer | MSA analysis, reads gb/gff/bed, exports PDF | No sliding identity + gap-density curve against a reference coordinate system; PDF only |
+| pyMSAviz / MSAplot | MSA colour blocks + seqlogo | No sliding identity curve |
+| Jalview | Per-column conservation colouring | Not a genome-coordinate sliding window plot |
+| dna_features_viewer | Gene track | Track only |
 
-`srspair` 格式目前没有专门的可视化工具（GitHub 全站检索只在 janis-core 里找到 datatype 声明）。
+There is also no dedicated visualizer for the `srspair` format (a GitHub-wide
+search only turns up a datatype declaration in janis-core).
 
-## 安装
+## Installation
 
 ```bash
 cd tools/alignment-conservation-plot
 ./setup.sh
 ```
 
-脚本会优先使用 `/opt/homebrew/bin/python3.14`（自带 Tk 9.1），创建 `.venv` 并安装
-`matplotlib` 与 `biopython`。若需要代理：
+The script prefers `/opt/homebrew/bin/python3.14` (which bundles Tk 9.1),
+creates a `.venv` and installs `matplotlib` and `biopython`. Behind a proxy:
 
 ```bash
 http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 ./setup.sh
 ```
 
-## 命令行
+## Command line
 
 ```bash
 ./.venv/bin/python align_conservation_plot.py \
@@ -44,103 +49,119 @@ http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 ./setup.sh
     --title "NODE_1 vs NC_004718.3"
 ```
 
-输出：
+Output:
 
 ```
 figure.svg
 figure.pdf
 ```
 
-`--hotspot-table-md` 与 `--pdf-with-table` 的表格语言同样由 `--lang` 决定。
+The table language used by `--hotspot-table-md` and `--pdf-with-table` also
+follows `--lang`.
 
-### 常用参数
+### Common options
 
-| 参数 | 默认 | 说明 |
+| Option | Default | Description |
 |---|---|---|
-| `-i, --input` | 必填 | 比对文件（`.gz` 亦可） |
-| `-o, --out` | `<input>_conservation.svg` | SVG 输出路径 |
-| `--pdf [PATH]` | 关 | 同时输出 PDF |
-| `--png [PATH]` | 关 | 同时输出 PNG（`--dpi` 控制分辨率） |
-| `--coords-seq` | `1` | 用第几条序列做坐标轴（1-based）。与参考基因组比对时通常设为 `2` |
-| `--window` / `--step` | `300` / `50` | 滑窗大小与步长（bp） |
-| `--annotation` | 无 | 注释文件路径，**或 NCBI accession（如 `NC_004718.3`）** |
-| `--annotation-timeout` | `60` | 在线下载超时（秒） |
-| `--no-annotation-cache` | 关 | 不读也不写本地下载缓存 |
-| `--refresh-annotation` | 关 | 忽略缓存，重新下载 |
-| `--annotation-format` | 自动 | `genbank` / `gff3` / `tsv` |
-| `--record` | 第一个 | GenBank 多记录时指定 record id |
-| `--min-orf-aa` | `90` | 自动预测 ORF 的最短氨基酸长度 |
-| `--indel-min` | `8` | 只报告 ≥ 该长度的 indel |
-| `--hotspot-k` | `1.5` | 热点阈值 = median − k × 1.4826 × MAD |
-| `--hotspot-pct` | 空 | 改用百分位阈值（优先于 `--hotspot-k`） |
-| `--keep-terminal-gaps` | 关 | 保留两端全 gap 列（默认剔除） |
-| `--lang` | `en` | 图内文字语言，`zh` 自动用 PingFang SC |
-| `--stats-out` | 无 | 导出逐窗口统计 TSV |
-| `--summary-out` | 无 | 导出 JSON 摘要 |
-| `--hotspot-table-md` | 无 | 把低保守区表导出为 Markdown |
-| `--pdf-with-table` | 关 | 把低保守区表追加到 PDF（图仍在第 1 页） |
-| `--figsize W H` | 自动 | 图幅尺寸（英寸） |
-| `--gui` | — | 启动图形界面 |
+| `-i, --input` | required | Alignment file (`.gz` is fine) |
+| `-o, --out` | `<input>_conservation.svg` | SVG output path |
+| `--pdf [PATH]` | off | Also write a PDF |
+| `--png [PATH]` | off | Also write a PNG (`--dpi` controls resolution) |
+| `--coords-seq` | `1` | Which sequence provides the coordinate axis (1-based). Usually `2` when aligning to a reference genome |
+| `--window` / `--step` | `300` / `50` | Window size and step (bp) |
+| `--annotation` | none | Annotation file path, **or an NCBI accession such as `NC_004718.3`** |
+| `--annotation-timeout` | `60` | Online download timeout (seconds) |
+| `--no-annotation-cache` | off | Neither read nor write the download cache |
+| `--refresh-annotation` | off | Ignore the cache and download again |
+| `--annotation-format` | auto | `genbank` / `gff3` / `tsv` |
+| `--record` | first | Record id when a GenBank file holds several records |
+| `--min-orf-aa` | `90` | Minimum amino-acid length for predicted ORFs |
+| `--indel-min` | `8` | Only report indels at least this long |
+| `--hotspot-k` | `1.5` | Hotspot threshold = median − k × 1.4826 × MAD |
+| `--hotspot-pct` | empty | Use a percentile threshold instead (takes precedence over `--hotspot-k`) |
+| `--keep-terminal-gaps` | off | Keep terminal all-gap columns (trimmed by default) |
+| `--lang` | `en` | Figure text language; `zh` switches to PingFang SC |
+| `--stats-out` | none | Write the per-window statistics TSV |
+| `--summary-out` | none | Write a JSON summary |
+| `--hotspot-table-md` | none | Write the low-conservation table as Markdown |
+| `--pdf-with-table` | off | Append the hotspot table pages to the PDF (figure stays on page 1) |
+| `--figsize W H` | automatic | Figure size in inches |
+| `--gui` | — | Launch the graphical interface |
 
-## 图形界面
+## Graphical interface
 
 ```bash
 ./.venv/bin/python align_conservation_plot.py --gui
-# 或双击 run_gui.command
+# or double-click run_gui.command
 ```
 
-- 左侧填写参数，右侧实时预览；
-- 「注释文件或 accession」框可以直接填 `NC_004718.3`，联网下载（有缓存）；
-- 右侧分「图 / 表」两个页签，表为低保守区一览（序号与图中编号一一对应）；
-- 计算在后台线程执行，不阻塞界面。
+- Parameters on the left, live preview on the right.
+- The "annotation file or accession" field accepts `NC_004718.3` directly and
+  downloads it (with caching).
+- The right pane has **Figure / Table** tabs; the table is the low-conservation
+  overview whose indices match the numbered hotspots in the figure.
+- Computation runs on a background thread, so the window stays responsive.
 
-### 低保守区表
+### Low-conservation table
 
-表格列：`序号`、`坐标 (bp)`、`长度 (bp)`、`一致度 % (不计gap)`、
-`一致度 %（计gap）`、`插入或删除 %`、`所在区域`。
+Columns: `#`, `Coordinates (bp)`, `Length (bp)`, `Identity % (ungapped)`,
+`Identity % (with gaps)`, `Indel %`, `Region`.
 
-- 序号与图中热点编号严格一致；图会为**全部**热点编号。
-- `所在区域` 取与热点重叠最长的注释特征；若有另一特征重叠 ≥ 热点长度 20%，
-  以 `A / B` 并列；无注释时为 `—`。
-- `插入或删除 %` 同时给两个数：`gap 列占比 / ≥阈值插入或删除事件覆盖比例`，
-  例如 `3.7 / 0.0`。
+- Indices match the hotspot numbers in the figure exactly; the figure numbers
+  **every** hotspot.
+- `Region` is the annotated feature with the largest overlap; a second feature
+  is appended as `A / B` when it covers at least 20% of the hotspot. Without
+  annotation it shows `—`.
+- `Indel %` reports two numbers: `gap-column share / share covered by indels at
+  or above the threshold`, for example `3.7 / 0.0`.
 
-### 批量导出
+### Batch export
 
-在「导出内容」里勾选需要的项目，点「一键导出…」选一次目录，按输入文件名批量落盘：
+Tick the items under "Export", press "Export selected…", choose a folder once,
+and every artefact is written with the input file name as prefix:
 
-| 勾选项 | 产物 |
+| Selection | Output |
 |---|---|
-| 数据（TSV / JSON 可选） | `<stem>_windows.tsv` 或 `<stem>_summary.json` |
-| 图 SVG | `<stem>_conservation.svg` |
-| 图 PNG（DPI 可填 72–1200） | `<stem>_conservation.png` |
-| 低保守区表 Markdown | `<stem>_hotspots.md` |
-| PDF → 图 | `<stem>_conservation.pdf` 第 1 页 |
-| PDF → 表 | 同一 PDF 的第 2 页起（表多时续页） |
+| Data (TSV / JSON) | `<stem>_windows.tsv` or `<stem>_summary.json` |
+| Figure SVG | `<stem>_conservation.svg` |
+| Figure PNG (DPI 72–1200) | `<stem>_conservation.png` |
+| Hotspot table Markdown | `<stem>_hotspots.md` |
+| PDF → figure | `<stem>_conservation.pdf`, page 1 |
+| PDF → table | the same PDF, from page 2 (extra pages when needed) |
 
-PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 1 页、表从第 2 页起；
-只勾表则从第 1 页开始排表。
+The PDF figure and table can both be selected: the result is one file with the
+figure on page 1 and the table from page 2. Table only starts on page 1.
 
-### 界面语言
+### Interface and figure language
 
-左栏右上角的按钮可在中文 / English 之间一键切换：标签、按钮、对话框、
-表格表头与表注都会切换，**图内文字仍由「图内文字」单选项单独控制**。
+The interface starts in English; the button at the top right switches to Chinese
+in one click and translates labels, buttons, dialogs, table headers and table
+notes. **Figure text has its own setting** (default English) and does not follow
+the interface language.
 
-## 统计口径
+**Note: after clicking "Plot", changing the figure-text language has no effect
+until you plot again.**
 
-- **一致度（不计 gap）** = matches / (matches + mismatches)，只在双方都有碱基的列上计算。
-- **一致度（计 gap）** = matches / 所有列，gap 列计入分母。
-- **插入或删除（indel）**：某条序列中连续 gap ≥ `--indel-min` 的区段；
-  表中「插入或删除 %」为 `gap 列占比 / 该区段被 ≥阈值插入或删除事件覆盖的比例`。
-- **多序列**：逐列统计「相同的序列对 / 有信息的序列对」，等价于平均两两一致度。
-- **端部 gap**：所有序列都为 gap 的连续列，默认剔除并在页脚注明长度。
-- **热点**：滑窗一致度低于 `median − k×1.4826×MAD`（或指定百分位）的窗口，合并为区间。
-- 中文界面下统一使用「一致度 / 不计gap / 插入或删除」，对应英文
-  identity / ungapped / indel。
+## How the numbers are computed
 
-## 在线注释（accession）
+- **Identity (ungapped)** = matches / (matches + mismatches), computed only on
+  columns where both sequences carry a base.
+- **Identity (with gaps)** = matches / all columns, gap columns in the denominator.
+- **Indel**: a stretch of at least `--indel-min` consecutive gaps in one
+  sequence. The table's `Indel %` is `gap-column share / share of the region
+  covered by indels at or above the threshold`.
+- **Multiple sequences**: per column, "identical pairs / informative pairs",
+  which equals the mean pairwise identity.
+- **Terminal gaps**: leading/trailing columns where all sequences are gaps;
+  trimmed by default and reported in the footer.
+- **Hotspots**: windows whose sliding identity is below
+  `median − k×1.4826×MAD` (or the given percentile), merged into intervals.
+- The Chinese interface uses 一致度 / 不计gap / 插入或删除 for
+  identity / ungapped / indel.
 
-`--annotation` 除了本地文件，也可以直接填 NCBI accession，程序会自动下载：
+## Online annotation (accession)
+
+Besides a local file, `--annotation` accepts an NCBI accession and downloads it:
 
 ```bash
 ./.venv/bin/python align_conservation_plot.py \
@@ -148,46 +169,54 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
     --annotation NC_004718.3
 ```
 
-- 走 E-utilities `efetch`（`db=nuccore`, `rettype=gbwithparts`）。
-- 下载结果缓存在 `~/Library/Caches/align-conservation-plot/<accession>.gb`
-  （Linux `$XDG_CACHE_HOME`，Windows `%LOCALAPPDATA%`；可用环境变量
-  `ALIGN_PLOT_CACHE` 覆盖）。用 `--refresh-annotation` 强制重下。
-- 支持 `NCBI_API_KEY` / `NCBI_EMAIL` 环境变量（提高限速配额）。
-- 需要代理时，`http_proxy` / `https_proxy` 会被自动沿用：
+- Uses E-utilities `efetch` (`db=nuccore`, `rettype=gbwithparts`).
+- Downloads are cached in `~/Library/Caches/align-conservation-plot/<accession>.gb`
+  (`$XDG_CACHE_HOME` on Linux, `%LOCALAPPDATA%` on Windows; override with
+  `ALIGN_PLOT_CACHE`). Use `--refresh-annotation` to download again.
+- `NCBI_API_KEY` / `NCBI_EMAIL` are honoured (higher rate limits).
+- `http_proxy` / `https_proxy` are reused when a proxy is required:
 
   ```bash
   http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 \
     ./.venv/bin/python align_conservation_plot.py ... --annotation NC_004718.3
   ```
 
-- 图例页脚会标注来源，例如 `GenBank NC_004718.3 (已下载)` 或 `(缓存)`。
+- The figure footer records the origin, e.g. `GenBank NC_004718.3 (已下载)` or
+  `(缓存)`.
 
-## 注释文件
+## Annotation files
 
-- **GenBank**（`.gb/.gbk/.genbank`）：取 `gene` / `CDS` / `mat_peptide` 等特征。
-- **GFF3**（`.gff/.gff3`）：取 `gene` / `CDS` / `mRNA` 等，坐标按 1-based 闭区间解析。
-- **TSV**：`name<TAB>start<TAB>end[<TAB>strand][<TAB>color]`，`#` 开头为注释。
-- 不提供注释时，程序会对坐标参考序列做六框 ORF 预测（ATG 起始、贪心去重叠），
-  并在页脚标注来源为 `predicted ORFs`。
+- **GenBank** (`.gb/.gbk/.genbank`): `gene` / `CDS` / `mat_peptide` features.
+- **GFF3** (`.gff/.gff3`): `gene` / `CDS` / `mRNA`, parsed as 1-based closed
+  intervals.
+- **TSV**: `name<TAB>start<TAB>end[<TAB>strand][<TAB>color]`; lines starting with
+  `#` are comments.
+- Without annotation the program predicts ORFs in six frames on the coordinate
+  reference sequence (ATG start, greedy de-overlap) and labels the source as
+  `predicted ORFs`.
 
-## 输出示例
+## Example output
 
-`examples/` 下有本仓库自带 srspair 的示例输出（见 `examples/README.md`）。
+`examples/` contains output generated from the srspair file shipped in this
+repository (see `examples/README.md`).
 
-## 已知限制
+## Known limitations
 
-- `needle` 默认 `-gapextend 0.5` 会在高分歧区过度调用 1–2 bp 的小 gap；
-  这些短 indel 不宜当作生物学信号，建议只看 ≥8 bp 的事件。
-- 单条 contig 的低保守区也可能来自组装错误，最好用 reads 回贴验证覆盖度。
-- 多序列的 identity 语义是「平均两两」，与「相对第一条序列」不同，图注已说明。
-- GUI 不做缩放/平移，改参数后重新绘图即可。
+- `needle` uses `-gapextend 0.5` by default, which over-calls 1–2 bp gaps in
+  divergent regions. Do not treat those short indels as biological signal;
+  prefer events of 8 bp or more.
+- Low-conservation regions of a single contig may also be assembly artefacts;
+  verify coverage by mapping reads back.
+- For multiple sequences, identity means "mean pairwise", not "relative to the
+  first sequence"; the figure caption says so.
+- The GUI has no zoom or pan; change parameters and plot again.
 
-## 目录
+## Layout
 
 ```
-align_conservation_plot.py   # 全部逻辑：解析 / 统计 / 绘图 / CLI / GUI
+align_conservation_plot.py   # everything: parsing / statistics / plotting / CLI / GUI
 requirements.txt             # matplotlib, biopython
-setup.sh                     # 建 .venv 并安装依赖
-run_gui.command              # macOS 双击启动 GUI
-examples/                    # 示例输出
+setup.sh                     # create .venv and install dependencies
+run_gui.command              # macOS double-click launcher for the GUI
+examples/                    # example output
 ```

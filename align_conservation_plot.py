@@ -1962,7 +1962,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         "hotspot_k": tk.StringVar(value="1.5"),
         "hotspot_pct": tk.StringVar(value=""),
         "title": tk.StringVar(),
-        "lang": tk.StringVar(value="zh"),
+        "lang": tk.StringVar(value="en"),
         "trim": tk.BooleanVar(value=True),
         "exp_data": tk.BooleanVar(value=True),
         "exp_data_format": tk.StringVar(value="TSV"),
@@ -1973,7 +1973,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         "exp_pdf_table": tk.BooleanVar(value=False),
         "png_dpi": tk.StringVar(value="300"),
     }
-    gui_lang = {"value": "zh"}
+    gui_lang = {"value": "en"}
     task_queue: "queue.Queue[tuple]" = queue.Queue()
     registry: List[Tuple[object, str, str]] = []
     app = {"fig": None, "result": None, "args": None, "canvas": None, "toolbar": None}
