@@ -136,13 +136,16 @@ figure on page 1 and the table from page 2. Table only starts on page 1.
 
 ### Interface and figure language
 
-The interface starts in English; the button at the top right switches to Chinese
-in one click and translates labels, buttons, dialogs, table headers and table
-notes. **Figure text has its own setting** (default English) and does not follow
-the interface language.
+The interface starts in English; the button at the top right switches the GUI
+language, which affects labels, buttons and dialogs only.
 
-**Note: after clicking "Plot", changing the figure-text language has no effect
-until you plot again.**
+**Every chart output — figure text, the table tab headers and note, exported
+Markdown and PDF — follows the "Figure text" radio button** (default English) and
+is independent of the interface language. Changing that option refreshes the
+table immediately.
+
+**Note: after clicking "Plot", changing the figure-text language does not redraw
+the existing figure; plot again. The table updates right away.**
 
 ## How the numbers are computed
 
@@ -187,8 +190,8 @@ Besides a local file, `--annotation` accepts an NCBI accession and downloads it:
     ./.venv/bin/python align_conservation_plot.py ... --annotation NC_004718.3
   ```
 
-- The figure footer records the origin, e.g. `GenBank NC_004718.3 (已下载)` or
-  `(缓存)`.
+- The figure footer records the origin, e.g. `GenBank NC_004718.3 (downloaded)`
+  or `(cached)`; Chinese charts show `(已下载)` / `(缓存)`.
 
 ## Annotation files
 

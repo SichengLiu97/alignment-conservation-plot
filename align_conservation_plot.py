@@ -151,6 +151,7 @@ class AnalysisResult:
     hotspots: List[Hotspot]
     features: List[Feature]
     feature_source: str
+    feature_source_origin: str = ""
     pairs_per_column: int = 1
     warnings: List[str] = field(default_factory=list)
 
@@ -916,7 +917,7 @@ def attach_features(
         if looks_like_accession(path):
             opts = annotation_options or {}
             if fmt:
-                result.warnings.append("--annotation-format 对 accession 无效，已忽略")
+                result.warnings.append("--annotation-format is ignored for accession input")
             feats, origin = load_genbank_accession(
                 path,
                 record_id,
@@ -925,10 +926,10 @@ def attach_features(
                 refresh=opts.get("refresh", False),
             )
             result.features = feats
-            label = "缓存" if origin == "cache" else "已下载"
-            result.feature_source = f"GenBank {path.strip().upper()} ({label})"
+            result.feature_source = f"GenBank {path.strip().upper()}"
+            result.feature_source_origin = origin
             if not feats:
-                result.warnings.append(f"{path} 中没有可用特征")
+                result.warnings.append(f"no usable features in {path}")
             return
 
         if not os.path.exists(path):
@@ -948,7 +949,9 @@ def attach_features(
             result.feature_source = "TSV"
         result.features = feats
         if not feats:
-            result.warnings.append(f"注释文件 {os.path.basename(path)} 中没有可用特征")
+            result.warnings.append(
+                f"no usable features in {os.path.basename(path)}"
+            )
         return
 
     seq = aln.ungapped(result.coords_seq)
@@ -957,6 +960,19 @@ def attach_features(
         result.feature_source = "predicted ORFs"
     else:
         result.feature_source = "none"
+
+
+def feature_source_label(result: AnalysisResult, lang: str = "en") -> str:
+    """Render the annotation source, including how an accession was obtained."""
+    source = result.feature_source
+    origin = getattr(result, "feature_source_origin", "")
+    if not origin:
+        return source
+    if lang == "zh":
+        suffix = "已下载" if origin == "download" else "缓存"
+    else:
+        suffix = "downloaded" if origin == "download" else "cached"
+    return f"{source} ({suffix})"
 
 
 # --------------------------------------------------------------------------
@@ -1258,7 +1274,7 @@ def build_figure(result: AnalysisResult, opts) -> "object":
         median=result.identity_ungapped,
         lead=result.lead_gap,
         trail=result.trail_gap,
-        source=result.feature_source,
+        source=feature_source_label(result, opts.lang),
         start=xmin,
         end=xmax,
         span=xmax - xmin + 1,
@@ -1398,12 +1414,12 @@ def hotspot_context(result: AnalysisResult, opts, lang: str = "en") -> str:
         return (
             f"{names} ｜ 窗口 {opts.window} bp / 步长 {opts.step} bp ｜ "
             f"比较区间 {result.coord_min:,}–{result.coord_max:,}（{span:,} bp）｜ "
-            f"一致度 {result.identity_ungapped:.1f}% ｜ 基因来源 {result.feature_source}"
+            f"一致度 {result.identity_ungapped:.1f}% ｜ 基因来源 {feature_source_label(result, 'zh')}"
         )
     return (
         f"{names} | window {opts.window} bp / step {opts.step} bp | "
         f"compared {result.coord_min:,}-{result.coord_max:,} ({span:,} bp) | "
-        f"identity {result.identity_ungapped:.1f}% | genes: {result.feature_source}"
+        f"identity {result.identity_ungapped:.1f}% | genes: {feature_source_label(result, 'en')}"
     )
 
 
@@ -1433,7 +1449,8 @@ def write_hotspot_markdown(result: AnalysisResult, path: str, opts, lang: str = 
         + ("(不计 gap)" if lang == "zh" else "(gap-free)")
     )
     lines.append(
-        f"- " + ("基因来源" if lang == "zh" else "Gene source") + f": {result.feature_source}"
+        f"- " + ("基因来源" if lang == "zh" else "Gene source")
+        + f": {feature_source_label(result, lang)}"
     )
     lines.append("")
     lines.append("| " + " | ".join(headers) + " |")
@@ -1608,6 +1625,7 @@ def summary_dict(result: AnalysisResult, opts) -> Dict[str, object]:
             for row, h in zip(hotspot_rows(result, getattr(opts, "lang", "en")), result.hotspots)
         ],
         "annotation_source": result.feature_source,
+        "annotation_origin": getattr(result, "feature_source_origin", "") or None,
         "features": [
             {"name": f.name, "start": f.start, "end": f.end, "strand": f.strand}
             for f in result.features
@@ -1836,7 +1854,7 @@ GUI_TEXT = {
         "lbl_hotspot_pct": "热点百分位 (空=用 k)",
         "lbl_title": "标题（可空）",
         "chk_trim": "剔除两端全 gap 列",
-        "lbl_fig_lang": "图内文字：",
+        "lbl_fig_lang": "图表文字：",
         "lang_zh": "中文",
         "lang_en": "English",
         "btn_switch_lang": "Switch to English",
@@ -1965,7 +1983,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     state = {
         "input": tk.StringVar(),
         "annotation": tk.StringVar(),
-        "coords_seq": tk.StringVar(value="2"),
+        "coords_seq": tk.StringVar(value="1"),
         "window": tk.StringVar(value="300"),
         "step": tk.StringVar(value="50"),
         "indel_min": tk.StringVar(value="8"),
@@ -2215,7 +2233,13 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     register(empty_label, "table_empty")
 
     def table_lang() -> str:
-        return gui_lang["value"]
+        """The table belongs to the output, so it follows the figure language.
+
+        The interface language only drives GUI chrome; otherwise setting the
+        figure text to English while the interface stayed Chinese produced an
+        English figure with a Chinese table.
+        """
+        return state["lang"].get() or "en"
 
     def refresh_table_headers():
         headers = HOTSPOT_TABLE_HEADERS.get(table_lang(), HOTSPOT_TABLE_HEADERS["en"])
@@ -2274,6 +2298,8 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         apply_language()
 
     switch_btn.configure(command=toggle_language)
+    state["lang"].trace_add("write", lambda *_args: refresh_table_headers())
+    state["lang"].trace_add("write", lambda *_args: refresh_table_rows())
 
     def current_args():
         args = build_parser().parse_args([])
