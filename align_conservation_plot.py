@@ -1889,7 +1889,8 @@ GUI_TEXT = {
         "msg_dpi_invalid": "DPI 必须是 72–1200 之间的整数。",
         "msg_dir_title": "选择导出目录",
         "msg_export_done_title": "导出完成",
-        "msg_export_done_body": "已写入以下文件：",
+        "msg_export_done_body": "已将 {files} 导出至：\n{path}",
+        "export_list_sep": "、",
         "dialog_pick_input": "选择比对文件",
         "dialog_pick_annotation": "选择注释文件",
         "dialog_files_all": "所有文件",
@@ -1948,7 +1949,8 @@ GUI_TEXT = {
         "msg_dpi_invalid": "DPI must be an integer between 72 and 1200.",
         "msg_dir_title": "Choose export folder",
         "msg_export_done_title": "Export complete",
-        "msg_export_done_body": "Files written:",
+        "msg_export_done_body": "Exported {files} to:\n{path}",
+        "export_list_sep": ", ",
         "dialog_pick_input": "Choose alignment file",
         "dialog_pick_annotation": "Choose annotation file",
         "dialog_files_all": "All files",
@@ -2500,9 +2502,15 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
             status.set(text("status_failed").format(msg=str(exc)))
             return
         status.set(text("status_exported").format(count=len(written), path=folder))
+        # Every file lands in the same folder, so list bare names and show the
+        # folder once instead of repeating the full path for each file.
+        names = [os.path.basename(path) for path in written]
         messagebox.showinfo(
             text("msg_export_done_title"),
-            text("msg_export_done_body") + "\n\n" + "\n".join(written),
+            text("msg_export_done_body").format(
+                files=text("export_list_sep").join(names),
+                path=folder,
+            ),
         )
 
     draw_btn.configure(command=draw)
