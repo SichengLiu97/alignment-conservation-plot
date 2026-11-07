@@ -1,5 +1,12 @@
+# Python
 .venv/
+venv/
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Build artefacts / local output
 examples/*.pdf
 examples/*.png
+
+# OS
+.DS_Store

@@ -5,7 +5,7 @@
 - Compared region: 8,918–29,632 (20,715 bp)
 - Window / step: 300 bp / 50 bp
 - Overall identity: 84.4% (gap-free)
-- Gene source: GenBank
+- Gene source: GenBank NC_004718.3 (cached)
 
 | # | Coordinates (bp) | Length (bp) | Identity % (ungapped) | Identity % (with gaps) | Indel % (gap cols / indel bp) | Region |
 |---|---|---|---|---|---|---|

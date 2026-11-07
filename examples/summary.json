@@ -163,7 +163,8 @@
       "columns": 716
     }
   ],
-  "annotation_source": "GenBank",
+  "annotation_source": "GenBank NC_004718.3",
+  "annotation_origin": "cache",
   "features": [
     {
       "name": "ORF1ab",

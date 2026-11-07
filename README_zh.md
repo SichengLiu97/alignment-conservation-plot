@@ -39,11 +39,11 @@ http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 ./setup.sh
 
 ```bash
 ./.venv/bin/python align_conservation_plot.py \
-    -i "../../1 - Assembly and Annotation of the SARS-CoV-2 Genome/Galaxy17-[needle on dataset 9 and 16].srspair" \
+    -i "examples/sars-cov-vs-sars-cov-2.srspair" \
     -o figure.svg --pdf \
     --coords-seq 2 --window 300 --step 50 \
     --annotation NC_004718.3 \
-    --title "NODE_1 vs NC_004718.3"
+    --title "SARS-CoV-2 contig vs SARS-CoV (NC_004718.3)"
 ```
 
 输出：
