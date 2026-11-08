@@ -207,7 +207,7 @@ Besides a local file, `--annotation` accepts an NCBI accession and downloads it:
 ## Example output
 
 `examples/` contains output generated from the srspair file shipped in this
-repository (see `examples/README.md`).
+repository (see [examples/README.md](examples/README.md)).
 
 ## Known limitations
 

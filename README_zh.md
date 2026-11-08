@@ -183,7 +183,7 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
 
 ## 输出示例
 
-`examples/` 下有本仓库自带 srspair 的示例输出（见 `examples/README.md`）。
+`examples/` 下有本仓库自带 srspair 的示例输出（见 [examples/README_zh.md](examples/README_zh.md)）。
 
 ## 已知限制
 
