@@ -236,34 +236,24 @@ repository (see [examples/README.md](examples/README.md)).
 - For multiple sequences, identity means "mean pairwise", not "relative to the
   first sequence"; the figure caption says so.
 - The GUI has no zoom or pan; change parameters and plot again.
+- All development and testing so far has been carried out on **ARM macOS 27**. x86-64 macOS and Windows have not been tested; the Tkinter GUI in particular may behave differently there.
+- **Amino-acid alignments**: The tool was not written for protein alignments. Its logic is alphabet-agnostic, so a protein alignment will parse and plot, but the output is misleading in several ways:
 
-### Amino-acid alignments
-
-The tool was not written for protein alignments. Its logic is
-alphabet-agnostic, so a protein alignment will parse and plot, but the output
-is misleading in several ways:
-
-- **Units are hard-coded to `bp`** everywhere — figure axis, footer, table
+  - **Units are hard-coded to `bp`** everywhere — figure axis, footer, table
   headers, Markdown and JSON. The numbers are residues; the label is wrong.
-- **Default thresholds are tuned for DNA** (`--window 300 --step 50
+  - **Default thresholds are tuned for DNA** (`--window 300 --step 50
   --indel-min 8`). For proteins something like 30–50 / 10 / 1–3 fits better.
-- **Identity is exact-match only.** There is no BLOSUM/PAM similarity, so
+  - **Identity is exact-match only.** There is no BLOSUM/PAM similarity, so
   conservative substitutions count as mismatches and the curve sits lower than
   a similarity-based one.
-- **Ambiguous residues** (`X`, `B`, `Z`, `J`, `U`) are compared literally, so
+  - **Ambiguous residues** (`X`, `B`, `Z`, `J`, `U`) are compared literally, so
   `X` against `X` counts as a match.
-- **The gene track ends up empty.** Automatic ORF prediction only runs on
+  - **The gene track ends up empty.** Automatic ORF prediction only runs on
   sequences restricted to `ACGTN`, and the annotation readers only recognise
   nucleotide feature types (`gene`/`CDS`). Protein `Region`/`Domain`/`Site`
   features in GenBank and `protein_match`/`domain`/`region` in GFF3 are skipped.
-- **Protein accessions do not resolve.** `--annotation` always queries NCBI
+  - **Protein accessions do not resolve.** `--annotation` always queries NCBI
   `nuccore`, so `NP_…`, `XP_…`, `YP_…` or UniProt-style identifiers fail.
-
-### Platform coverage
-
-All development and testing so far has been carried out on **ARM macOS 27**.
-x86-64 macOS and Windows have not been tested; the Tkinter GUI in particular
-may behave differently there.
 
 ## Licence
 
