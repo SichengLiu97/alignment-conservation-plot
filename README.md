@@ -236,7 +236,7 @@ repository (see [examples/README.md](examples/README.md)).
 - For multiple sequences, identity means "mean pairwise", not "relative to the
   first sequence"; the figure caption says so.
 - The GUI has no zoom or pan; change parameters and plot again.
-- All development and testing so far has been carried out on **ARM macOS 27**. x86-64 macOS and Windows have not been tested; the Tkinter GUI in particular may behave differently there.
+- All development and testing so far has been carried out on **ARM macOS 26**. x86-64 macOS and Windows have not been tested; the Tkinter GUI in particular may behave differently there.
 - **Amino-acid alignments**: The tool was not written for protein alignments. Its logic is alphabet-agnostic, so a protein alignment will parse and plot, but the output is misleading in several ways:
 
   - **Units are hard-coded to `bp`** everywhere — figure axis, footer, table
