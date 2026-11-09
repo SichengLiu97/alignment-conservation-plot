@@ -1,9 +1,10 @@
-# align-conservation-plot
+# alignment-conservation-plot
 
 **中文** | [English](README.md)
 
-从比对文件生成「滑窗一致度 + gap 密度 + 基因轨道」的出版级图，输出 **SVG / PDF / PNG**。
-支持 EMBOSS `srspair` / `pair` 以及常见多序列比对格式，带 Tkinter GUI。
+从比对文件生成「滑窗一致度 + gap 密度 + 基因轨道」的出版级图，输出 **SVG / PDF / PNG**。支持 EMBOSS `srspair` / `pair` 以及常见多序列比对格式，带 Tkinter GUI。
+
+> **本程序并非为氨基酸序列比对可视化设计。** 它是核酸工具。蛋白比对能解析、能出图，但单位标注、默认参数和基因轨道对蛋白都是错的，详见 [已知限制](#已知限制)。
 
 ![example](examples/example.svg)
 
@@ -23,8 +24,20 @@
 
 ## 安装
 
+### 获取代码
+
+克隆仓库，或在仓库页面下载 ZIP 后解压：
+
 ```bash
-cd tools/alignment-conservation-plot
+git clone <仓库地址> alignment-conservation-plot
+cd alignment-conservation-plot
+```
+
+### 创建环境
+
+需要 Python 3.9 或更新版本（开发时使用 3.14）。然后运行：
+
+```bash
 ./setup.sh
 ```
 
@@ -98,8 +111,7 @@ figure.pdf
 
 ### 低保守区表
 
-表格列：`序号`、`坐标 (bp)`、`长度 (bp)`、`一致度 % (不计gap)`、
-`一致度 %（计gap）`、`插入或删除 %`、`所在区域`。
+表格列：`序号`、`坐标 (bp)`、`长度 (bp)`、`一致度 % (不计gap)`、`一致度 %（计gap）`、`插入或删除 %`、`所在区域`。
 
 - 序号与图中热点编号严格一致；图会为**全部**热点编号。
 - `所在区域` 取与热点重叠最长的注释特征；若有另一特征重叠 ≥ 热点长度 20%，以 `A / B` 并列；无注释时为 `—`。
@@ -166,8 +178,7 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
 - **GenBank**（`.gb/.gbk/.genbank`）：取 `gene` / `CDS` / `mat_peptide` 等特征。
 - **GFF3**（`.gff/.gff3`）：取 `gene` / `CDS` / `mRNA` 等，坐标按 1-based 闭区间解析。
 - **TSV**：`name<TAB>start<TAB>end[<TAB>strand][<TAB>color]`，`#` 开头为注释。
-- 不提供注释时，程序会对坐标参考序列做六框 ORF 预测（ATG 起始、贪心去重叠），
-  并在页脚标注来源为 `predicted ORFs`。
+- 不提供注释时，程序会对坐标参考序列做六框 ORF 预测（ATG 起始、贪心去重叠），并在页脚标注来源为 `predicted ORFs`。
 
 ## 输出示例
 
@@ -179,6 +190,21 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
 - 单条 contig 的低保守区也可能来自组装错误，最好用 reads 回贴验证覆盖度。
 - 多序列的 identity 语义是「平均两两」，与「相对第一条序列」不同，图注已说明。
 - GUI 不做缩放/平移，改参数后重新绘图即可。
+
+### 氨基酸序列比对
+
+本程序不是为蛋白比对写的。其逻辑与字母表无关，因此蛋白比对能正常解析、也能出图，但结果在以下几处具有误导性：
+
+- **单位被写死为 `bp`**：图轴、页脚、表头、Markdown 与 JSON 全部如此。数值实际是残基数，单位标注错误。
+- **默认阈值是按 DNA 设的**（`--window 300 --step 50 --indel-min 8`）。蛋白比对用 30–50 / 10 / 1–3 更合适。
+- **一致度只算精确相同**，没有 BLOSUM/PAM 相似度，因此保守替换会被记为 mismatch，曲线会低于相似度口径。
+- **模糊残基**（`X`、`B`、`Z`、`J`、`U`）按字面比较，`X` 对 `X` 会被判为相同。
+- **基因轨道基本是空的**：自动 ORF 预测只对限定在 `ACGTN` 的序列启用，注释读取器也只认核酸特征类型（`gene`/`CDS`）。GenBank 中的蛋白 `Region`/`Domain`/`Site` 以及 GFF3 中的 `protein_match`/`domain`/`region` 都会被跳过。
+- **蛋白 accession 无法解析**：`--annotation` 固定查询 NCBI `nuccore`，`NP_…`、`XP_…`、`YP_…` 或 UniProt 风格编号都会失败。
+
+### 平台覆盖
+
+截至目前，全部开发与测试工作均在 **ARM macOS 27** 上完成。x86-64 macOS 与 Windows 尚未测试，Tkinter GUI 在这些平台上的行为可能不同。
 
 ## 许可证
 
