@@ -28,8 +28,7 @@ cd tools/alignment-conservation-plot
 ./setup.sh
 ```
 
-脚本会优先使用 `/opt/homebrew/bin/python3.14`（自带 Tk 9.1），创建 `.venv` 并安装
-`matplotlib` 与 `biopython`。若需要代理：
+脚本会优先使用 `/opt/homebrew/bin/python3.14`（自带 Tk 9.1），创建 `.venv` 并安装 `matplotlib` 与 `biopython`。若需要代理：
 
 ```bash
 http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 ./setup.sh
@@ -103,10 +102,8 @@ figure.pdf
 `一致度 %（计gap）`、`插入或删除 %`、`所在区域`。
 
 - 序号与图中热点编号严格一致；图会为**全部**热点编号。
-- `所在区域` 取与热点重叠最长的注释特征；若有另一特征重叠 ≥ 热点长度 20%，
-  以 `A / B` 并列；无注释时为 `—`。
-- `插入或删除 %` 同时给两个数：`gap 列占比 / ≥阈值插入或删除事件覆盖比例`，
-  例如 `3.7 / 0.0`。
+- `所在区域` 取与热点重叠最长的注释特征；若有另一特征重叠 ≥ 热点长度 20%，以 `A / B` 并列；无注释时为 `—`。
+- `插入或删除 %` 同时给两个数：`gap 列占比 / ≥阈值插入或删除事件覆盖比例`，例如 `3.7 / 0.0`。
 
 ### 批量导出
 
@@ -121,15 +118,13 @@ figure.pdf
 | PDF → 图 | `<stem>_conservation.pdf` 第 1 页 |
 | PDF → 表 | 同一 PDF 的第 2 页起（表多时续页） |
 
-PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 1 页、表从第 2 页起；
-只勾表则从第 1 页开始排表。
+PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 1 页、表从第 2 页起；只勾表则从第 1 页开始排表。
 
 ### 界面及图表语言
 
 界面默认英文（`English`），左栏右上角的按钮可一键切换界面语言，只影响标签、按钮和对话框。
 
-**所有图表输出——图内文字、表格页签的表头与表注、导出的 Markdown 与 PDF——统一由
-「图表文字」单选项控制**，默认英文，与界面语言无关。切换该选项时表格会立即刷新。
+**所有图表输出——图内文字、表格页签的表头与表注、导出的 Markdown 与 PDF——统一由「图表文字」单选项控制**，默认英文，与界面语言无关。切换该选项时表格会立即刷新。
 
 **注意：点击「绘图」后切换图表文字语言不会重绘已有图，需要重新绘图；表格会立即更新。**
 
@@ -137,16 +132,12 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
 
 - **一致度（不计 gap）** = matches / (matches + mismatches)，只在双方都有碱基的列上计算。
 - **一致度（计 gap）** = matches / 所有列，gap 列计入分母。
-- **gap 列**：至少有一条序列在该列为 gap 即计入（两序列时等价于「任一条为 gap」；
-  多序列时不会因为总有人有碱基而恒为 0）。
-- **插入或删除（indel）**：某条序列中连续 gap ≥ `--indel-min` 的区段；
-  表中「插入或删除 %」为 `gap 列占比 / 该区段被 ≥阈值插入或删除事件覆盖的比例`。
-- **多序列**：逐列统计「相同的序列对 / 有信息的序列对」，等价于平均两两一致度；
-  因此「计 gap」的分母是 `列数 × 序列对数`，不是列数本身。
+- **gap 列**：至少有一条序列在该列为 gap 即计入（两序列时等价于「任一条为 gap」；多序列时不会因为总有人有碱基而恒为 0）。
+- **插入或删除（indel）**：某条序列中连续 gap ≥ `--indel-min` 的区段；表中「插入或删除 %」为 `gap 列占比 / 该区段被 ≥阈值插入或删除事件覆盖的比例`。
+- **多序列**：逐列统计「相同的序列对 / 有信息的序列对」，等价于平均两两一致度；因此「计 gap」的分母是 `列数 × 序列对数`，不是列数本身。
 - **端部 gap**：所有序列都为 gap 的连续列，默认剔除并在页脚注明长度。
 - **热点**：滑窗一致度低于 `median − k×1.4826×MAD`（或指定百分位）的窗口，合并为区间。
-- 中文界面下统一使用「一致度 / 不计gap / 插入或删除」，对应英文
-  identity / ungapped / indel。
+- 中文界面下统一使用「一致度 / 不计gap / 插入或删除」，对应英文 identity / ungapped / indel。
 
 ## 在线注释（accession）
 
@@ -159,9 +150,7 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
 ```
 
 - 走 E-utilities `efetch`（`db=nuccore`, `rettype=gbwithparts`）。
-- 下载结果缓存在 `~/Library/Caches/align-conservation-plot/<accession>.gb`
-  （Linux `$XDG_CACHE_HOME`，Windows `%LOCALAPPDATA%`；可用环境变量
-  `ALIGN_PLOT_CACHE` 覆盖）。用 `--refresh-annotation` 强制重下。
+- 下载结果缓存在 `~/Library/Caches/align-conservation-plot/<accession>.gb`（Linux `$XDG_CACHE_HOME`，Windows `%LOCALAPPDATA%`；可用环境变量 `ALIGN_PLOT_CACHE` 覆盖）。用 `--refresh-annotation` 强制重下。
 - 支持 `NCBI_API_KEY` / `NCBI_EMAIL` 环境变量（提高限速配额）。
 - 需要代理时，`http_proxy` / `https_proxy` 会被自动沿用：
 
@@ -170,8 +159,7 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
     ./.venv/bin/python align_conservation_plot.py ... --annotation NC_004718.3
   ```
 
-- 图例页脚会标注来源，例如 `GenBank NC_004718.3 (downloaded)` / `(cached)`；
-  中文图表则显示 `(已下载)` / `(缓存)`。
+- 图例页脚会标注来源，例如 `GenBank NC_004718.3 (downloaded)` / `(cached)`；中文图表则显示 `(已下载)` / `(缓存)`。
 
 ## 注释文件
 
@@ -187,20 +175,16 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
 
 ## 已知限制
 
-- `needle` 默认 `-gapextend 0.5` 会在高分歧区过度调用 1–2 bp 的小 gap；
-  这些短 indel 不宜当作生物学信号，建议只看 ≥8 bp 的事件。
+- `needle` 默认 `-gapextend 0.5` 会在高分歧区过度调用 1–2 bp 的小 gap；这些短 indel 不宜当作生物学信号，建议只看 ≥8 bp 的事件。
 - 单条 contig 的低保守区也可能来自组装错误，最好用 reads 回贴验证覆盖度。
 - 多序列的 identity 语义是「平均两两」，与「相对第一条序列」不同，图注已说明。
 - GUI 不做缩放/平移，改参数后重新绘图即可。
 
 ## 许可证
 
-本项目以 [BSD 3-Clause 许可证](LICENSE) 发布，
-© 2026 alignment-conservation-plot 贡献者。
+本项目以 [BSD 3-Clause 许可证](LICENSE) 发布，© 2026 alignment-conservation-plot 贡献者。
 
-该许可证覆盖源代码。`examples/` 下的示例数据派生自公开数据来源，不在其覆盖
-范围内，详见
-[examples/README_zh.md](examples/README_zh.md#数据来源致谢与许可)。
+该许可证覆盖源代码。`examples/` 下的示例数据派生自公开数据来源，不在其覆盖范围内，详见 [examples/README_zh.md](examples/README_zh.md#数据来源致谢与许可)。
 
 ## 目录
 
