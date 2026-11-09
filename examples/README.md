@@ -41,7 +41,10 @@ restrictions on the use or distribution of the data it serves, and INSDC
 records carry no use restrictions or licensing requirements. Cite the original
 data sources if you redistribute them.
 
-Generated from `examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair`:
+## Files and how to regenerate them
+
+Everything in this directory was generated from
+`examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair`:
 
 ```bash
 ./.venv/bin/python align_conservation_plot.py \

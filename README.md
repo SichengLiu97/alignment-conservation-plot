@@ -222,7 +222,8 @@ repository (see [examples/README.md](examples/README.md)).
 
 ## Licence
 
-Released under the [BSD 3-Clause License](LICENSE) © 2026 Sicheng Liu.
+Released under the [BSD 3-Clause License](LICENSE),
+© 2026 the alignment-conservation-plot contributors.
 
 The licence covers the source code. The example data under `examples/` derives
 from public sources and is not covered by it — see

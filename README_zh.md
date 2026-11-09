@@ -195,7 +195,8 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
 
 ## 许可证
 
-本项目以 [BSD 3-Clause 许可证](LICENSE) 发布，© 2026 Sicheng Liu。
+本项目以 [BSD 3-Clause 许可证](LICENSE) 发布，
+© 2026 alignment-conservation-plot 贡献者。
 
 该许可证覆盖源代码。`examples/` 下的示例数据派生自公开数据来源，不在其覆盖
 范围内，详见

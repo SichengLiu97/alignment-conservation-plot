@@ -38,8 +38,10 @@
 分发不设限制，INSDC 记录也不附带任何使用限制或许可要求。若要再分发这些
 文件，请引用原始数据来源。
 
-用 `examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair`
-生成：
+## 文件说明与复现方法
+
+本目录下的文件都由
+`examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair` 生成：
 
 ```bash
 ./.venv/bin/python align_conservation_plot.py \
