@@ -39,7 +39,7 @@ http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 ./setup.sh
 
 ```bash
 ./.venv/bin/python align_conservation_plot.py \
-    -i "examples/sars-cov-vs-sars-cov-2.srspair" \
+    -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o figure.svg --pdf \
     --coords-seq 2 --window 300 --step 50 \
     --annotation NC_004718.3 \
@@ -193,6 +193,14 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
 - 多序列的 identity 语义是「平均两两」，与「相对第一条序列」不同，图注已说明。
 - GUI 不做缩放/平移，改参数后重新绘图即可。
 
+## 许可证
+
+本项目以 [BSD 3-Clause 许可证](LICENSE) 发布，© 2026 Sicheng Liu。
+
+该许可证覆盖源代码。`examples/` 下的示例数据派生自公开数据来源，不在其覆盖
+范围内，详见
+[examples/README_zh.md](examples/README_zh.md#数据来源致谢与许可)。
+
 ## 目录
 
 ```
@@ -200,5 +208,5 @@ align_conservation_plot.py   # 全部逻辑：解析 / 统计 / 绘图 / CLI / G
 requirements.txt             # matplotlib, biopython
 setup.sh                     # 建 .venv 并安装依赖
 run_gui.command              # macOS 双击启动 GUI
-examples/                    # 示例输出
+examples/                    # 示例输出（见 examples/README_zh.md）
 ```

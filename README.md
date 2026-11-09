@@ -42,7 +42,7 @@ http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 ./setup.sh
 
 ```bash
 ./.venv/bin/python align_conservation_plot.py \
-    -i "examples/sars-cov-vs-sars-cov-2.srspair" \
+    -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o figure.svg --pdf \
     --coords-seq 2 --window 300 --step 50 \
     --annotation NC_004718.3 \
@@ -220,6 +220,14 @@ repository (see [examples/README.md](examples/README.md)).
   first sequence"; the figure caption says so.
 - The GUI has no zoom or pan; change parameters and plot again.
 
+## Licence
+
+Released under the [BSD 3-Clause License](LICENSE) © 2026 Sicheng Liu.
+
+The licence covers the source code. The example data under `examples/` derives
+from public sources and is not covered by it — see
+[examples/README.md](examples/README.md#provenance-acknowledgement-and-licence).
+
 ## Layout
 
 ```
@@ -227,5 +235,5 @@ align_conservation_plot.py   # everything: parsing / statistics / plotting / CLI
 requirements.txt             # matplotlib, biopython
 setup.sh                     # create .venv and install dependencies
 run_gui.command              # macOS double-click launcher for the GUI
-examples/                    # example output
+examples/                    # example output (see examples/README.md)
 ```
