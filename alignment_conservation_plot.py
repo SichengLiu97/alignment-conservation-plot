@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""align_conservation_plot.py
+"""alignment_conservation_plot.py
 
 Sliding-window conservation plot for pairwise / multiple sequence alignments.
 
@@ -12,16 +12,16 @@ Examples
 --------
 CLI::
 
-    python align_conservation_plot.py -i aln.srspair -o fig.svg --pdf \
+    python alignment_conservation_plot.py -i aln.srspair -o fig.svg --pdf \
         --coords-seq 2 --annotation NC_004718.3
 
 ``--annotation`` takes either a local GenBank/GFF3/TSV file or an NCBI
 accession, which is downloaded once and cached under the user cache
-directory (``~/Library/Caches/align-conservation-plot`` on macOS).
+directory (``~/Library/Caches/alignment-conservation-plot`` on macOS).
 
 GUI::
 
-    python align_conservation_plot.py --gui
+    python alignment_conservation_plot.py --gui
 """
 
 from __future__ import annotations
@@ -37,6 +37,13 @@ import traceback
 import urllib.parse
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+
+# --------------------------------------------------------------------------
+# Tool metadata
+# --------------------------------------------------------------------------
+
+PROGRAM_NAME = "alignment-conservation-plot"
+__version__ = "0.01"
 
 # --------------------------------------------------------------------------
 # Data model
@@ -713,7 +720,7 @@ def looks_like_accession(value: str) -> bool:
 
 
 def annotation_cache_dir() -> str:
-    override = os.environ.get("ALIGN_PLOT_CACHE")
+    override = os.environ.get("ALIGNMENT_CONSERVATION_PLOT_CACHE")
     if override:
         return os.path.expanduser(override)
     if sys.platform == "darwin":
@@ -722,7 +729,7 @@ def annotation_cache_dir() -> str:
         base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
     else:
         base = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
-    return os.path.join(base, "align-conservation-plot")
+    return os.path.join(base, "alignment-conservation-plot")
 
 
 def cache_path_for(accession: str) -> str:
@@ -748,7 +755,7 @@ def _http_get(url: str, timeout: float) -> str:
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "align-conservation-plot/1.1 (+https://github.com/)",
+            "User-Agent": f"{PROGRAM_NAME}/{__version__} (+https://github.com/)",
             "Accept": "text/plain",
         },
     )
@@ -1772,7 +1779,7 @@ def write_hotspot_markdown(result: AnalysisResult, path: str, opts, lang: str = 
     lines.append("")
     lines.append(
         "```bash\n"
-        f"python align_conservation_plot.py -i <alignment> -o <figure.svg> "
+        f"python alignment_conservation_plot.py -i <alignment> -o <figure.svg> "
         f"--coords-seq {result.coords_seq + 1} --window {opts.window} --step {opts.step}\n"
         "```"
     )
@@ -2094,7 +2101,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--top", type=int, default=10, help="number of hotspots to print")
     p.add_argument("--gui", action="store_true", help="launch the Tkinter GUI")
-    p.add_argument("--version", action="version", version="align_conservation_plot 1.0")
+    p.add_argument("--version", action="version", version=f"{PROGRAM_NAME} {__version__}")
     return p
 
 
@@ -2135,7 +2142,7 @@ def run_cli(args) -> int:
         print(f"error: file not found - {exc.filename}", file=sys.stderr)
         return 1
     except Exception as exc:  # noqa: BLE001
-        if os.environ.get("ALIGN_PLOT_DEBUG"):
+        if os.environ.get("ALIGNMENT_CONSERVATION_PLOT_DEBUG"):
             traceback.print_exc()
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -2501,7 +2508,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
 
     def _on_wheel(event):
         widget = getattr(event, "widget", None)
-        trace = os.environ.get("ALIGN_PLOT_TRACE_WHEEL")
+        trace = os.environ.get("ALIGNMENT_CONSERVATION_PLOT_TRACE_WHEEL")
         if trace:
             print(
                 f"wheel widget={widget} delta={getattr(event, 'delta', None)} "
@@ -2529,7 +2536,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         delta in the low 16 bits, both signed (see tk::PreciseScrollDeltas).
         """
         widget = getattr(event, "widget", None)
-        if os.environ.get("ALIGN_PLOT_TRACE_WHEEL"):
+        if os.environ.get("ALIGNMENT_CONSERVATION_PLOT_TRACE_WHEEL"):
             print(
                 f"touchpad widget={widget} delta={getattr(event, 'delta', None)} "
                 f"in_panel={_in_panel(widget)} target={_wheel_target(event)}",

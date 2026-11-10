@@ -47,7 +47,7 @@ Everything in this directory was generated from
 `examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair`:
 
 ```bash
-./.venv/bin/python align_conservation_plot.py \
+./.venv/bin/python alignment_conservation_plot.py \
     -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o examples/example.svg --pdf --png \
     --coords-seq 2 --annotation NC_004718.3 \
@@ -68,7 +68,7 @@ The annotation file is not part of the repository; pass the NCBI accession
 instead and the program downloads it:
 
 ```bash
-./.venv/bin/python align_conservation_plot.py \
+./.venv/bin/python alignment_conservation_plot.py \
     -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o examples/example.svg --pdf --coords-seq 2 \
     --annotation NC_004718.3 \
@@ -76,7 +76,7 @@ instead and the program downloads it:
 ```
 
 The first run caches the record at
-`~/Library/Caches/align-conservation-plot/NC_004718.3.gb`, so later runs work
+`~/Library/Caches/alignment-conservation-plot/NC_004718.3.gb`, so later runs work
 offline.
 
 The `--alias` flag renames the contig in the figure only; the alignment file is

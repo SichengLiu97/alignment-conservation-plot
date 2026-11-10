@@ -50,7 +50,7 @@ http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 ./setup.sh
 ## 命令行
 
 ```bash
-./.venv/bin/python align_conservation_plot.py \
+./.venv/bin/python alignment_conservation_plot.py \
     -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o figure.svg --pdf \
     --coords-seq 2 --window 300 --step 50 \
@@ -114,7 +114,7 @@ figure.pdf
 ### 序列别名
 
 ```bash
-./.venv/bin/python align_conservation_plot.py -i aln.srspair -o fig.svg \
+./.venv/bin/python alignment_conservation_plot.py -i aln.srspair -o fig.svg \
     --alias "NODE_1_length=Assembled Contig 1" \
     --alias "NC_004718.3=SARS-CoV Tor2"
 ```
@@ -149,7 +149,7 @@ figure.pdf
 ## 图形界面
 
 ```bash
-./.venv/bin/python align_conservation_plot.py --gui
+./.venv/bin/python alignment_conservation_plot.py --gui
 # 或双击 run_gui.command
 ```
 
@@ -201,7 +201,7 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
 打印当前实际选用的字体及其许可：
 
 ```bash
-./.venv/bin/python align_conservation_plot.py --show-font
+./.venv/bin/python alignment_conservation_plot.py --show-font
 ```
 
 SVG 保留文本（`svg.fonttype = none`），由阅读器的浏览器选字体；PDF 嵌入字体子集（`pdf.fonttype = 42`），各平台显示一致。GUI 启动时用同一份列表选择界面字体，并在状态栏上方显示同一句话。
@@ -228,19 +228,19 @@ SVG 保留文本（`svg.fonttype = none`），由阅读器的浏览器选字体�
 `--annotation` 除了本地文件，也可以直接填 NCBI accession，程序会自动下载：
 
 ```bash
-./.venv/bin/python align_conservation_plot.py \
+./.venv/bin/python alignment_conservation_plot.py \
     -i aln.srspair -o fig.svg --coords-seq 2 \
     --annotation NC_004718.3
 ```
 
 - 走 E-utilities `efetch`（`db=nuccore`, `rettype=gbwithparts`）。
-- 下载结果缓存在 `~/Library/Caches/align-conservation-plot/<accession>.gb`（Linux `$XDG_CACHE_HOME`，Windows `%LOCALAPPDATA%`；可用环境变量 `ALIGN_PLOT_CACHE` 覆盖）。用 `--refresh-annotation` 强制重下。
+- 下载结果缓存在 `~/Library/Caches/alignment-conservation-plot/<accession>.gb`（Linux `$XDG_CACHE_HOME`，Windows `%LOCALAPPDATA%`；可用环境变量 `ALIGNMENT_CONSERVATION_PLOT_CACHE` 覆盖）。用 `--refresh-annotation` 强制重下。
 - 支持 `NCBI_API_KEY` / `NCBI_EMAIL` 环境变量（提高限速配额）。
 - 需要代理时，`http_proxy` / `https_proxy` 会被自动沿用：
 
   ```bash
   http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 \
-    ./.venv/bin/python align_conservation_plot.py ... --annotation NC_004718.3
+    ./.venv/bin/python alignment_conservation_plot.py ... --annotation NC_004718.3
   ```
 
 - 图例页脚会标注来源，例如 `GenBank NC_004718.3 (downloaded)` / `(cached)`；中文图表则显示 `(已下载)` / `(缓存)`。
@@ -281,9 +281,9 @@ SVG 保留文本（`svg.fonttype = none`），由阅读器的浏览器选字体�
 ## 目录
 
 ```
-align_conservation_plot.py   # 全部逻辑：解析 / 统计 / 绘图 / CLI / GUI
-requirements.txt             # matplotlib, biopython
-setup.sh                     # 建 .venv 并安装依赖
-run_gui.command              # macOS 双击启动 GUI
-examples/                    # 示例输出（见 examples/README_zh.md）
+alignment_conservation_plot.py  # 全部逻辑：解析 / 统计 / 绘图 / CLI / GUI
+requirements.txt                # matplotlib, biopython
+setup.sh                        # 建 .venv 并安装依赖
+run_gui.command                 # macOS 双击启动 GUI
+examples/                       # 示例输出（见 examples/README_zh.md）
 ```

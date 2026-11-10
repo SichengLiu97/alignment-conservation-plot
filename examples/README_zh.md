@@ -26,7 +26,7 @@
 本目录下的文件都由 `examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair` 生成：
 
 ```bash
-./.venv/bin/python align_conservation_plot.py \
+./.venv/bin/python alignment_conservation_plot.py \
     -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o examples/example.svg --pdf --png \
     --coords-seq 2 --annotation NC_004718.3 \
@@ -46,14 +46,14 @@
 注释文件不进仓库，直接给 NCBI accession 即可（程序会自动下载）：
 
 ```bash
-./.venv/bin/python align_conservation_plot.py \
+./.venv/bin/python alignment_conservation_plot.py \
     -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o examples/example.svg --pdf --coords-seq 2 \
     --annotation NC_004718.3 \
     --alias "NODE_1_length=SRR11528307 Contig 1"
 ```
 
-首次运行会从 NCBI 下载并缓存到 `~/Library/Caches/align-conservation-plot/NC_004718.3.gb`，之后离线也能用。
+首次运行会从 NCBI 下载并缓存到 `~/Library/Caches/alignment-conservation-plot/NC_004718.3.gb`，之后离线也能用。
 
 核对数值：端部 gap 8,917 / 119，核心区 21,072 列，matches 17,219，mismatches 3,185，identity 84.4%。
 

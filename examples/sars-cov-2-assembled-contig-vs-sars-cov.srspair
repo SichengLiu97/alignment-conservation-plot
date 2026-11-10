@@ -2,16 +2,16 @@
 # Program: needle
 # Rundate: Mon 19 Oct 2026 11:12:35
 # Commandline: needle
-#    -asequence /mnt/user-data-volA/data40/9/6/5/dataset_9652b7aa-d1bb-4054-a3b3-bd48d9f7ec30.dat
-#    -bsequence /mnt/user-data-volD/data41/7/c/8/dataset_7c8cd6f4-456b-498c-ad93-92610f550d3c.dat
-#    -outfile /mnt/scratch/job_working_directory/016/246/16246358/outputs/dataset_6f5e8949-b021-4d79-b4ce-6dfb913b9647.dat
+#    -asequence <Galaxy dataset>
+#    -bsequence <Galaxy dataset>
+#    -outfile <Galaxy dataset>
 #    -gapopen 10.0
 #    -gapextend 0.5
 #    -brief yes
 #    -aformat3 srspair
 #    -auto
 # Align_format: srspair
-# Report_file: /mnt/scratch/job_working_directory/016/246/16246358/outputs/dataset_6f5e8949-b021-4d79-b4ce-6dfb913b9647.dat
+# Report_file: <Galaxy dataset>
 ########################################
 
 #=======================================

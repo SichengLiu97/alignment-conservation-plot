@@ -16,5 +16,5 @@
 Indel % shows gap-column share / share covered by indels at or above the reporting threshold.
 
 ```bash
-python align_conservation_plot.py -i <alignment> -o <figure.svg> --coords-seq 2 --window 300 --step 50
+python alignment_conservation_plot.py -i <alignment> -o <figure.svg> --coords-seq 2 --window 300 --step 50
 ```

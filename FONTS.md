@@ -5,7 +5,7 @@ page records why that order looks the way it does, and what each font's licence
 allows — because a chart destined for publication should not silently depend on
 a font that cannot legally travel with it.
 
-Run `./.venv/bin/python align_conservation_plot.py --show-font` to see which
+Run `./.venv/bin/python alignment_conservation_plot.py --show-font` to see which
 font your installation will actually use. The GUI shows the same line above its
 status bar.
 

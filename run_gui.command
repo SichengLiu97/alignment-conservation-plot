@@ -6,4 +6,4 @@ if [ ! -x .venv/bin/python ]; then
   read -r -p "Press Enter to close..."
   exit 1
 fi
-exec ./.venv/bin/python align_conservation_plot.py --gui
+exec ./.venv/bin/python alignment_conservation_plot.py --gui

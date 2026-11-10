@@ -58,7 +58,7 @@ http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 ./setup.sh
 ## Command line
 
 ```bash
-./.venv/bin/python align_conservation_plot.py \
+./.venv/bin/python alignment_conservation_plot.py \
     -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o figure.svg --pdf \
     --coords-seq 2 --window 300 --step 50 \
@@ -124,7 +124,7 @@ can be relabelled without touching the alignment file.
 ### Sequence aliases
 
 ```bash
-./.venv/bin/python align_conservation_plot.py -i aln.srspair -o fig.svg \
+./.venv/bin/python alignment_conservation_plot.py -i aln.srspair -o fig.svg \
     --alias "NODE_1_length=Assembled Contig 1" \
     --alias "NC_004718.3=SARS-CoV Tor2"
 ```
@@ -165,7 +165,7 @@ Linkage rules:
 ## Graphical interface
 
 ```bash
-./.venv/bin/python align_conservation_plot.py --gui
+./.venv/bin/python alignment_conservation_plot.py --gui
 # or double-click run_gui.command
 ```
 
@@ -237,7 +237,7 @@ in [FONTS.md](FONTS.md).
 Print the font your installation actually picked, with its licence:
 
 ```bash
-./.venv/bin/python align_conservation_plot.py --show-font
+./.venv/bin/python alignment_conservation_plot.py --show-font
 ```
 
 SVG keeps text as text (`svg.fonttype = none`), so the reader's browser resolves
@@ -280,21 +280,21 @@ is independent of the interface language. **Note: after clicking "Plot", changin
 Besides a local file, `--annotation` accepts an NCBI accession and downloads it:
 
 ```bash
-./.venv/bin/python align_conservation_plot.py \
+./.venv/bin/python alignment_conservation_plot.py \
     -i aln.srspair -o fig.svg --coords-seq 2 \
     --annotation NC_004718.3
 ```
 
 - Uses E-utilities `efetch` (`db=nuccore`, `rettype=gbwithparts`).
-- Downloads are cached in `~/Library/Caches/align-conservation-plot/<accession>.gb`
+- Downloads are cached in `~/Library/Caches/alignment-conservation-plot/<accession>.gb`
   (`$XDG_CACHE_HOME` on Linux, `%LOCALAPPDATA%` on Windows; override with
-  `ALIGN_PLOT_CACHE`). Use `--refresh-annotation` to download again.
+  `ALIGNMENT_CONSERVATION_PLOT_CACHE`). Use `--refresh-annotation` to download again.
 - `NCBI_API_KEY` / `NCBI_EMAIL` are honoured (higher rate limits).
 - `http_proxy` / `https_proxy` are reused when a proxy is required:
 
   ```bash
   http_proxy=http://127.0.0.1:8080 https_proxy=http://127.0.0.1:8080 \
-    ./.venv/bin/python align_conservation_plot.py ... --annotation NC_004718.3
+    ./.venv/bin/python alignment_conservation_plot.py ... --annotation NC_004718.3
   ```
 
 - The figure footer records the origin, e.g. `GenBank NC_004718.3 (downloaded)`
@@ -357,9 +357,9 @@ from public sources and is not covered by it — see
 ## Layout
 
 ```
-align_conservation_plot.py   # everything: parsing / statistics / plotting / CLI / GUI
-requirements.txt             # matplotlib, biopython
-setup.sh                     # create .venv and install dependencies
-run_gui.command              # macOS double-click launcher for the GUI
-examples/                    # example output (see examples/README.md)
+alignment_conservation_plot.py  # everything: parsing / statistics / plotting / CLI / GUI
+requirements.txt                # matplotlib, biopython
+setup.sh                        # create .venv and install dependencies
+run_gui.command                 # macOS double-click launcher for the GUI
+examples/                       # example output (see examples/README.md)
 ```

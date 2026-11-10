@@ -35,8 +35,8 @@ cat <<'EOF'
 
 Done.
 
-  CLI : ./.venv/bin/python align_conservation_plot.py -i ALIGNMENT -o figure.svg --pdf
-  GUI : ./.venv/bin/python align_conservation_plot.py --gui
+  CLI : ./.venv/bin/python alignment_conservation_plot.py -i ALIGNMENT -o figure.svg --pdf
+  GUI : ./.venv/bin/python alignment_conservation_plot.py --gui
         (or double-click run_gui.command)
 
 Matching the interpreter used by this script:
