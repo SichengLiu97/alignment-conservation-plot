@@ -97,7 +97,7 @@ follows `--lang`.
 | `--hotspot-k` | `1.5` | Hotspot threshold = median − k × 1.4826 × MAD |
 | `--hotspot-pct` | empty | Use a percentile threshold instead (takes precedence over `--hotspot-k`) |
 | `--keep-terminal-gaps` | off | Keep terminal all-gap columns (trimmed by default) |
-| `--lang` | `en` | Figure text language; `zh` switches to PingFang SC |
+| `--lang` | `en` | Figure text language (`en` / `zh`); the font chain is the same for both |
 | `--stats-out` | none | Write the per-window statistics TSV |
 | `--alias NAME=ALIAS` | none | Display alias for a sequence name (repeatable) |
 | `--no-title` | off | Hide the figure title |
@@ -212,6 +212,25 @@ and every artefact is written with the input file name as prefix:
 
 The PDF figure and table can both be selected: the result is one file with the
 figure on page 1 and the table from page 2. Table only starts on page 1.
+
+### Fonts
+
+The language option only changes the text, never the font. Both languages use
+one cross-platform chain, applied per glyph:
+
+```
+PingFang SC / Hiragino Sans GB / Heiti SC / Songti SC   (macOS)
+Microsoft YaHei / SimHei                                (Windows)
+Noto Sans CJK SC / Source Han Sans SC / WenQuanYi Zen Hei (Linux)
+Arial Unicode MS / DejaVu Sans                          (last resort)
+```
+
+The first installed family wins, and characters missing from it fall back to
+the next one, so mixed Chinese/English labels stay intact. `DejaVu Sans` ships
+with matplotlib, so an unknown platform still gets readable Latin text. SVG
+keeps text as text (`svg.fonttype = none`), so the reader's browser picks the
+font; PDF embeds a subset (`pdf.fonttype = 42`) and looks the same everywhere.
+The GUI picks its own font from the same list at start-up.
 
 ### Interface and figure language
 

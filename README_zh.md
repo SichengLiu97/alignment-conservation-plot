@@ -88,7 +88,7 @@ figure.pdf
 | `--hotspot-k` | `1.5` | 热点阈值 = median − k × 1.4826 × MAD |
 | `--hotspot-pct` | 空 | 改用百分位阈值（优先于 `--hotspot-k`） |
 | `--keep-terminal-gaps` | 关 | 保留两端全 gap 列（默认剔除） |
-| `--lang` | `en` | 图内文字语言，`zh` 自动用 PingFang SC |
+| `--lang` | `en` | 图内文字语言（`en` / `zh`），两种语言用同一套字体链 |
 | `--stats-out` | 无 | 导出逐窗口统计 TSV |
 | `--alias NAME=ALIAS` | 无 | 序列显示别名（可重复） |
 | `--no-title` | 关 | 关闭图标题 |
@@ -182,6 +182,19 @@ figure.pdf
 | PDF → 表 | 同一 PDF 的第 2 页起（表多时续页） |
 
 PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 1 页、表从第 2 页起；只勾表则从第 1 页开始排表。
+
+### 字体
+
+语言选项只改文字，不改字体。中英文共用同一条跨平台字体链，并按**逐字符**回退：
+
+```
+PingFang SC / Hiragino Sans GB / Heiti SC / Songti SC   （macOS）
+Microsoft YaHei / SimHei                                （Windows）
+Noto Sans CJK SC / Source Han Sans SC / WenQuanYi Zen Hei（Linux）
+Arial Unicode MS / DejaVu Sans                          （兜底）
+```
+
+取第一个已安装的字体，遇到它没有的字符再往后回退，因此中英混排不会出现方框。`DejaVu Sans` 随 matplotlib 一起安装，未知平台上至少拉丁文字仍然可读。SVG 保留文本（`svg.fonttype = none`），由阅读器的浏览器选字体；PDF 嵌入字体子集（`pdf.fonttype = 42`），各平台显示一致。GUI 在启动时用同一份候选表选择界面字体。
 
 ### 界面及图表语言
 

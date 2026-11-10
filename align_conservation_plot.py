@@ -1030,6 +1030,27 @@ LANG_PRESETS = {
 }
 
 
+UI_FONT_CANDIDATES = (
+    "PingFang SC",        # macOS
+    "Hiragino Sans GB",   # macOS
+    "Microsoft YaHei",    # Windows
+    "SimHei",             # Windows
+    "Noto Sans CJK SC",   # Linux
+    "Source Han Sans SC",
+    "WenQuanYi Zen Hei",
+    "Arial Unicode MS",
+)
+
+
+def pick_ui_font(available: Iterable[str]) -> str:
+    """First installed UI font from the cross-platform candidate list."""
+    installed = set(available)
+    for family in UI_FONT_CANDIDATES:
+        if family in installed:
+            return family
+    return "TkDefaultFont"
+
+
 def configure_matplotlib(lang: str) -> None:
     import logging
 
@@ -1039,14 +1060,21 @@ def configure_matplotlib(lang: str) -> None:
     # logs a noisy warning on every run.
     logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
-    matplotlib.rcParams["font.sans-serif"] = [
-        "PingFang SC",
-        "Hiragino Sans GB",
-        "Heiti SC",
-        "Songti SC",
-        "Source Han Sans SC",
+    # A list in font.family is resolved per glyph: a Latin font first means
+    # English picks it and CJK text still falls back to the next family.
+    # font.sans-serif only selects one font for the whole string.
+    matplotlib.rcParams["font.family"] = [
+        "PingFang SC",        # macOS
+        "Hiragino Sans GB",   # macOS
+        "Heiti SC",           # macOS
+        "Songti SC",          # macOS
+        "Microsoft YaHei",    # Windows
+        "SimHei",             # Windows
+        "Noto Sans CJK SC",   # Linux
+        "Source Han Sans SC", # cross-platform Adobe/Google release
+        "WenQuanYi Zen Hei",  # Linux fallback
         "Arial Unicode MS",
-        "DejaVu Sans",
+        "DejaVu Sans",        # ships with matplotlib, always available
     ]
     matplotlib.rcParams["axes.unicode_minus"] = False
     matplotlib.rcParams["svg.fonttype"] = "none"  # keep text editable
@@ -2271,10 +2299,11 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     root = tk.Tk()
     root.geometry("1380x880")
     root.minsize(1080, 680)
+    ui_font = pick_ui_font(tkfont.families(root))
     try:
-        tkfont.nametofont("TkDefaultFont").configure(family="PingFang SC", size=10)
-        tkfont.nametofont("TkTextFont").configure(family="PingFang SC", size=10)
-        tkfont.nametofont("TkMenuFont").configure(family="PingFang SC", size=10)
+        tkfont.nametofont("TkDefaultFont").configure(family=ui_font, size=10)
+        tkfont.nametofont("TkTextFont").configure(family=ui_font, size=10)
+        tkfont.nametofont("TkMenuFont").configure(family=ui_font, size=10)
     except Exception:
         pass
 
@@ -2405,7 +2434,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     row = 0
     header = ttk.Frame(left)
     header.grid(row=row, column=0, columnspan=3, sticky="we", pady=(0, 2))
-    title_label = ttk.Label(header, font=("PingFang SC", 11, "bold"))
+    title_label = ttk.Label(header, font=(ui_font, 11, "bold"))
     title_label.pack(side="left")
     register(title_label, "app_title")
     switch_btn = ttk.Button(header, width=16)
@@ -2413,7 +2442,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     register(switch_btn, "btn_switch_lang")
     row += 1
 
-    sec_input = ttk.Label(left, font=("PingFang SC", 9, "bold"))
+    sec_input = ttk.Label(left, font=(ui_font, 9, "bold"))
     sec_input.grid(row=row, column=0, columnspan=3, sticky="w", pady=(4, 2))
     register(sec_input, "sec_input")
     row += 1
@@ -2471,7 +2500,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     browse_ann.grid(row=row, column=2, padx=(4, 0))
     register(browse_ann, "btn_browse")
     row += 1
-    hint = ttk.Label(left, foreground="#777", wraplength=320, font=("PingFang SC", 8))
+    hint = ttk.Label(left, foreground="#777", wraplength=320, font=(ui_font, 8))
     hint.grid(row=row, column=0, columnspan=3, sticky="w")
     register(hint, "hint_annotation")
     row += 1
@@ -2490,7 +2519,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         height=5,
         width=20,
         wrap="none",
-        font=("PingFang SC", 9),
+        font=(ui_font, 9),
         relief="solid",
         borderwidth=1,
         highlightthickness=0,
@@ -2502,7 +2531,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     alias_text.pack(side="left", fill="both", expand=True)
     alias_scroll.pack(side="right", fill="y")
     row += 1
-    alias_hint = ttk.Label(left, foreground="#777", wraplength=320, font=("PingFang SC", 8))
+    alias_hint = ttk.Label(left, foreground="#777", wraplength=320, font=(ui_font, 8))
     alias_hint.grid(row=row, column=0, columnspan=3, sticky="w")
     register(alias_hint, "hint_alias")
     row += 1
@@ -2537,7 +2566,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
 
     ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
     row += 1
-    sec_params = ttk.Label(left, font=("PingFang SC", 9, "bold"))
+    sec_params = ttk.Label(left, font=(ui_font, 9, "bold"))
     sec_params.grid(row=row, column=0, columnspan=3, sticky="w")
     register(sec_params, "sec_params")
     row += 1
@@ -2586,7 +2615,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     row += 1
 
     # --- display switches --------------------------------------------------
-    sec_display = ttk.Label(left, font=("PingFang SC", 9, "bold"))
+    sec_display = ttk.Label(left, font=(ui_font, 9, "bold"))
     sec_display.grid(row=row, column=0, columnspan=3, sticky="w")
     register(sec_display, "sec_display")
     row += 1
@@ -2610,7 +2639,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     row += 1
 
     # --- table columns -----------------------------------------------------
-    sec_cols = ttk.Label(left, font=("PingFang SC", 9, "bold"))
+    sec_cols = ttk.Label(left, font=(ui_font, 9, "bold"))
     sec_cols.grid(row=row, column=0, columnspan=3, sticky="w", pady=(4, 0))
     register(sec_cols, "sec_table_cols")
     row += 1
@@ -2662,7 +2691,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
 
     ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
     row += 1
-    sec_export = ttk.Label(left, font=("PingFang SC", 9, "bold"))
+    sec_export = ttk.Label(left, font=(ui_font, 9, "bold"))
     sec_export.grid(row=row, column=0, columnspan=3, sticky="w")
     register(sec_export, "sec_export")
     row += 1
@@ -2742,10 +2771,10 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
 
     table_head = ttk.Frame(tab_table)
     table_head.pack(fill="x", padx=8, pady=(8, 0))
-    table_title_label = ttk.Label(table_head, font=("PingFang SC", 11, "bold"), anchor="w")
+    table_title_label = ttk.Label(table_head, font=(ui_font, 11, "bold"), anchor="w")
     table_title_label.pack(fill="x")
     table_subtitle_label = ttk.Label(table_head, foreground="#555", anchor="w",
-                                     font=("PingFang SC", 8), wraplength=760)
+                                     font=(ui_font, 8), wraplength=760)
     table_subtitle_label.pack(fill="x")
 
     table_holder = ttk.Frame(tab_table)
@@ -2761,7 +2790,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
               "ident_with_gaps": 115, "indel": 175, "region": 120}
     for col in HOTSPOT_TABLE_COLUMNS:
         tree.column(col, width=widths.get(col, 120), anchor="center", stretch=True)
-    table_note = ttk.Label(tab_table, foreground="#666", wraplength=760, font=("PingFang SC", 9))
+    table_note = ttk.Label(tab_table, foreground="#666", wraplength=760, font=(ui_font, 9))
     table_note.pack(fill="x", padx=8, pady=(0, 8))
     empty_label = ttk.Label(tab_table, foreground="#888")
     register(empty_label, "table_empty")
