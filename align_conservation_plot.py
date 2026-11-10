@@ -2471,29 +2471,44 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         target = first * total + pixels
         left_canvas.yview_moveto(max(0.0, min(1.0, target / total)))
 
-    def _wheel_target():
-        """Widget under the pointer, or None when it is outside the panel."""
-        try:
-            widget = root.winfo_containing(root.winfo_pointerx(), root.winfo_pointery())
-        except tk.TclError:
-            return None
+    def _in_panel(widget) -> bool:
+        """True when widget sits inside the scrolling panel."""
         while widget is not None:
-            if widget is left_outer:
-                return widget
             if widget is alias_text:
                 # Let the text box scroll itself.
-                return None
+                return False
+            if widget is left_outer:
+                return True
             parent = widget.winfo_parent()
             if not parent:
-                return None
+                return False
             try:
                 widget = widget.nametowidget(parent)
             except KeyError:
-                return None
-        return None
+                return False
+        return False
+
+    def _wheel_target(event):
+        """Panel membership from the event itself, else from the pointer."""
+        widget = getattr(event, "widget", None)
+        if widget is not None:
+            return _in_panel(widget)
+        try:
+            widget = root.winfo_containing(root.winfo_pointerx(), root.winfo_pointery())
+        except tk.TclError:
+            return False
+        return widget is not None and _in_panel(widget)
 
     def _on_wheel(event):
-        if _wheel_target() is None:
+        widget = getattr(event, "widget", None)
+        trace = os.environ.get("ALIGN_PLOT_TRACE_WHEEL")
+        if trace:
+            print(
+                f"wheel widget={widget} delta={getattr(event, 'delta', None)} "
+                f"num={getattr(event, 'num', None)} in_panel={_in_panel(widget)} target={_wheel_target(event)}",
+                file=sys.stderr,
+            )
+        if not _wheel_target(event):
             return None
         delta = getattr(event, "delta", 0)
         num = getattr(event, "num", 0)
@@ -2507,11 +2522,43 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         _scroll_pixels(pixels)
         return "break"
 
+    def _on_touchpad(event):
+        """Tk 9 sends trackpad gestures as <TouchpadScroll>, not <MouseWheel>.
+
+        %D packs the horizontal delta in the high 16 bits and the vertical
+        delta in the low 16 bits, both signed (see tk::PreciseScrollDeltas).
+        """
+        widget = getattr(event, "widget", None)
+        if os.environ.get("ALIGN_PLOT_TRACE_WHEEL"):
+            print(
+                f"touchpad widget={widget} delta={getattr(event, 'delta', None)} "
+                f"in_panel={_in_panel(widget)} target={_wheel_target(event)}",
+                file=sys.stderr,
+            )
+        if not _wheel_target(event):
+            return None
+        try:
+            packed = int(getattr(event, "delta", 0)) & 0xFFFFFFFF
+        except (TypeError, ValueError):
+            return None
+        dy = packed & 0xFFFF
+        if dy >= 0x8000:
+            dy -= 0x10000
+        if not dy:
+            return None
+        _scroll_pixels(-float(dy))
+        return "break"
+
     # A single binding on the toplevel is far more reliable than per-widget
     # bindings: every child inherits it, including widgets created later.
     root.bind_all("<MouseWheel>", _on_wheel)
     root.bind_all("<Button-4>", _on_wheel)
     root.bind_all("<Button-5>", _on_wheel)
+    try:
+        root.bind_all("<TouchpadScroll>", _on_touchpad)
+        touchpad_events = True
+    except tk.TclError:  # Tk < 9.1 has no trackpad event, wheels still work
+        touchpad_events = False
 
     left.grid_columnconfigure(0, minsize=175)
     right = ttk.Frame(root, padding=(4, 8, 8, 8))
@@ -2681,18 +2728,16 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     labelled_entry(left, row, "lbl_title", state["title"], width=20, span=2)
     row += 1
 
-    trim_chk = ttk.Checkbutton(left, variable=state["trim"])
-    trim_chk.grid(row=row, column=0, columnspan=3, sticky="w", pady=1)
+    trim_row = ttk.Frame(left)
+    trim_row.grid(row=row, column=0, columnspan=3, sticky="w", pady=1)
+    trim_chk = ttk.Checkbutton(trim_row, variable=state["trim"])
+    trim_chk.pack(side="left")
     register(trim_chk, "chk_trim")
-    row += 1
-
-    lang_row = ttk.Frame(left)
-    lang_row.grid(row=row, column=0, columnspan=3, sticky="w", pady=1)
-    fig_lang_label = ttk.Label(lang_row)
-    fig_lang_label.pack(side="left")
+    fig_lang_label = ttk.Label(trim_row)
+    fig_lang_label.pack(side="left", padx=(12, 0))
     register(fig_lang_label, "lbl_fig_lang")
     for value, key in (("zh", "lang_zh"), ("en", "lang_en")):
-        rb = ttk.Radiobutton(lang_row, value=value, variable=state["lang"])
+        rb = ttk.Radiobutton(trim_row, value=value, variable=state["lang"])
         rb.pack(side="left")
         register(rb, key)
     row += 1
@@ -2796,34 +2841,30 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     fmt_box.pack(side="left")
     row += 1
 
-    svg_chk = ttk.Checkbutton(left, variable=state["exp_svg"])
-    svg_chk.grid(row=row, column=0, columnspan=3, sticky="w")
+    svg_row = ttk.Frame(left)
+    svg_row.grid(row=row, column=0, columnspan=3, sticky="w")
+    svg_chk = ttk.Checkbutton(svg_row, variable=state["exp_svg"])
+    svg_chk.pack(side="left")
     register(svg_chk, "chk_svg")
-    row += 1
-
-    png_row = ttk.Frame(left)
-    png_row.grid(row=row, column=0, columnspan=3, sticky="w")
-    png_chk = ttk.Checkbutton(png_row, variable=state["exp_png"])
-    png_chk.pack(side="left")
+    png_chk = ttk.Checkbutton(svg_row, variable=state["exp_png"])
+    png_chk.pack(side="left", padx=(12, 0))
     register(png_chk, "chk_png")
-    dpi_label = ttk.Label(png_row)
+    dpi_label = ttk.Label(svg_row)
     dpi_label.pack(side="left", padx=(8, 2))
     register(dpi_label, "lbl_dpi")
-    ttk.Entry(png_row, textvariable=state["png_dpi"], width=6).pack(side="left")
+    ttk.Entry(svg_row, textvariable=state["png_dpi"], width=5).pack(side="left")
     row += 1
 
-    md_chk = ttk.Checkbutton(left, variable=state["exp_md"])
-    md_chk.grid(row=row, column=0, columnspan=3, sticky="w")
+    md_row = ttk.Frame(left)
+    md_row.grid(row=row, column=0, columnspan=3, sticky="w")
+    md_chk = ttk.Checkbutton(md_row, variable=state["exp_md"])
+    md_chk.pack(side="left")
     register(md_chk, "chk_md")
-    row += 1
-
-    pdf_row = ttk.Frame(left)
-    pdf_row.grid(row=row, column=0, columnspan=3, sticky="w")
-    pdf_label = ttk.Label(pdf_row)
-    pdf_label.pack(side="left")
+    pdf_label = ttk.Label(md_row)
+    pdf_label.pack(side="left", padx=(12, 0))
     register(pdf_label, "chk_pdf")
     for var, key in ((state["exp_pdf_fig"], "chk_pdf_fig"), (state["exp_pdf_table"], "chk_pdf_table")):
-        sub = ttk.Checkbutton(pdf_row, variable=var)
+        sub = ttk.Checkbutton(md_row, variable=var)
         sub.pack(side="left", padx=(8, 0))
         register(sub, key)
     row += 1
@@ -3293,6 +3334,18 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     sync_gene_dependent_widgets()
     sync_note_and_indel()
     refresh_table_layout()
+
+    def _bind_wheel_tree(widget) -> None:
+        """Widget-level bindings fire before class bindings, which may break."""
+        for child in widget.winfo_children():
+            if child is not alias_text:
+                for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                    child.bind(sequence, _on_wheel, add="+")
+                if touchpad_events:
+                    child.bind("<TouchpadScroll>", _on_touchpad, add="+")
+                _bind_wheel_tree(child)
+
+    _bind_wheel_tree(left)
     left_canvas.yview_moveto(0.0)
     root.after(120, poll_tasks)
 

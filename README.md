@@ -252,11 +252,7 @@ language, which affects labels, buttons and dialogs only.
 
 **Every chart output — figure text, the table tab headers and note, exported
 Markdown and PDF — follows the "Figure text" radio button** (default English) and
-is independent of the interface language. Changing that option refreshes the
-table immediately.
-
-**Note: after clicking "Plot", changing the figure-text language does not redraw
-the existing figure; plot again. The table updates right away.**
+is independent of the interface language. **Note: after clicking "Plot", changing the figure-text language does not redraw the existing figure; plot again. The table updates right away.**
 
 ## How the numbers are computed
 
