@@ -29,7 +29,7 @@
 克隆仓库，或在仓库页面下载 ZIP 后解压：
 
 ```bash
-git clone <仓库地址> alignment-conservation-plot
+git clone https://github.com/SichengLiu97/alignment-conservation-plot.git
 cd alignment-conservation-plot
 ```
 
@@ -274,7 +274,7 @@ SVG 保留文本（`svg.fonttype = none`），由阅读器的浏览器选字体�
 
 ## 许可证
 
-本项目以 [BSD 3-Clause 许可证](LICENSE) 发布，© 2026 alignment-conservation-plot 贡献者。
+本项目以 [BSD 3-Clause 许可证](LICENSE) 发布，© 2026 alignment-conservation-plot [贡献者](https://github.com/SichengLiu97/alignment-conservation-plot/graphs/contributors)。
 
 该许可证覆盖源代码。`examples/` 下的示例数据派生自公开数据来源，不在其覆盖范围内，详见 [examples/README_zh.md](examples/README_zh.md#数据来源致谢与许可)。
 

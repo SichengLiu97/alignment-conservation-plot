@@ -43,6 +43,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 # --------------------------------------------------------------------------
 
 PROGRAM_NAME = "alignment-conservation-plot"
+PROJECT_URL = "https://github.com/SichengLiu97/alignment-conservation-plot"
 __version__ = "0.01"
 
 # --------------------------------------------------------------------------
@@ -755,7 +756,7 @@ def _http_get(url: str, timeout: float) -> str:
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": f"{PROGRAM_NAME}/{__version__} (+https://github.com/)",
+            "User-Agent": f"{PROGRAM_NAME}/{__version__} (+{PROJECT_URL})",
             "Accept": "text/plain",
         },
     )

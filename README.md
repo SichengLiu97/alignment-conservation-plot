@@ -36,7 +36,7 @@ Clone the repository, or download it as a ZIP from the repository page and
 unpack it:
 
 ```bash
-git clone <repository-url> alignment-conservation-plot
+git clone https://github.com/SichengLiu97/alignment-conservation-plot.git
 cd alignment-conservation-plot
 ```
 
@@ -348,7 +348,8 @@ repository (see [examples/README.md](examples/README.md)).
 ## Licence
 
 Released under the [BSD 3-Clause License](LICENSE),
-© 2026 the alignment-conservation-plot contributors.
+© 2026 the alignment-conservation-plot
+[contributors](https://github.com/SichengLiu97/alignment-conservation-plot/graphs/contributors).
 
 The licence covers the source code. The example data under `examples/` derives
 from public sources and is not covered by it — see
