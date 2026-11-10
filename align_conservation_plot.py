@@ -281,6 +281,18 @@ def read_alignment(path: str) -> Alignment:
     return aln
 
 
+def read_sequence_names(path: str) -> List[str]:
+    """Sequence names exactly as the parser reports them.
+
+    The alias editor must key on these, and srspair truncates names to a fixed
+    width, so a header sniff would not match.
+    """
+    try:
+        return read_alignment(path).names
+    except Exception:
+        return []
+
+
 # --------------------------------------------------------------------------
 # Column statistics
 # --------------------------------------------------------------------------
@@ -1061,27 +1073,47 @@ def build_figure(result: AnalysisResult, opts) -> "object":
 
     t = LANG_PRESETS.get(opts.lang, LANG_PRESETS["en"])
     aln = result.alignment
-    ref_name = aln.names[result.coords_seq]
+    names = display_names(result, opts)
+    ref_name = names[result.coords_seq]
     xmin, xmax = result.coord_min, result.coord_max
 
-    n_genes = len(result.features)
-    row_heights = [0.62, 3.4, 0.85] + ([0.9] if n_genes else [])
+    show_title = not getattr(opts, "no_title", False)
+    show_subtitle = not getattr(opts, "no_subtitle", False)
+    show_head = show_title or show_subtitle
+    show_gap = not getattr(opts, "no_gap_track", False)
+    show_gene = not getattr(opts, "no_gene_track", False) and bool(result.features)
+    show_footer = not getattr(opts, "no_footer", False)
+
+    # The layout is assembled from whichever tracks are switched on.
+    layout: List[Tuple[str, float]] = []
+    if show_head:
+        layout.append(("head", 0.62))
+    layout.append(("identity", 3.4))
+    if show_gap:
+        layout.append(("gap", 0.85))
+    if show_gene:
+        layout.append(("gene", 0.9))
+
     if opts.figsize:
         figsize = tuple(opts.figsize)
     else:
-        figsize = (11.0, 5.7 if n_genes else 4.6)
+        extra = (0.55 if show_head else 0.0) + (0.85 if show_gap else 0.0) + (0.9 if show_gene else 0.0)
+        figsize = (11.0, 3.5 + extra)
     fig = Figure(figsize=figsize, dpi=opts.dpi, layout="constrained")
 
     gs = fig.add_gridspec(
-        nrows=len(row_heights),
+        nrows=len(layout),
         ncols=1,
-        height_ratios=row_heights,
+        height_ratios=[h for _, h in layout],
         hspace=0.10,
     )
-    ax_head = fig.add_subplot(gs[0])
-    ax_head.axis("off")
-    ax = fig.add_subplot(gs[1], sharex=ax_head)
-    ax_gap = fig.add_subplot(gs[2], sharex=ax)
+    slots = {name: gs[i] for i, (name, _) in enumerate(layout)}
+    ax_head = None
+    if show_head:
+        ax_head = fig.add_subplot(slots["head"])
+        ax_head.axis("off")
+    ax = fig.add_subplot(slots["identity"], sharex=ax_head)
+    ax_gap = fig.add_subplot(slots["gap"], sharex=ax) if show_gap else None
 
     # --- hotspot shading ---------------------------------------------------
     for hs in result.hotspots:
@@ -1147,27 +1179,28 @@ def build_figure(result: AnalysisResult, opts) -> "object":
     )
 
     # --- gap track ---------------------------------------------------------
-    gap_x = [(w.start + w.end) / 2 for w in wins]
-    gap_y = [w.gap_frac for w in wins]
-    ax_gap.fill_between(gap_x, gap_y, step="mid", color="#d95f02", alpha=0.35, lw=0)
-    ax_gap.plot(gap_x, gap_y, drawstyle="steps-mid", color="#d95f02", lw=0.9)
-    ax_gap.set_ylabel(t["gap"], fontsize=9)
-    ax_gap.set_ylim(0, max(5.0, (max(gap_y) if gap_y else 0) * 1.25))
-    ax_gap.grid(axis="y", color="#eee", lw=0.6)
-    ax_gap.set_axisbelow(True)
-    for side in ("top", "right"):
-        ax_gap.spines[side].set_visible(False)
+    if ax_gap is not None:
+        gap_x = [(w.start + w.end) / 2 for w in wins]
+        gap_y = [w.gap_frac for w in wins]
+        ax_gap.fill_between(gap_x, gap_y, step="mid", color="#d95f02", alpha=0.35, lw=0)
+        ax_gap.plot(gap_x, gap_y, drawstyle="steps-mid", color="#d95f02", lw=0.9)
+        ax_gap.set_ylabel(t["gap"], fontsize=9)
+        ax_gap.set_ylim(0, max(5.0, (max(gap_y) if gap_y else 0) * 1.25))
+        ax_gap.grid(axis="y", color="#eee", lw=0.6)
+        ax_gap.set_axisbelow(True)
+        for side in ("top", "right"):
+            ax_gap.spines[side].set_visible(False)
 
-    # indel ticks
-    if result.indels:
-        ymax = ax_gap.get_ylim()[1]
-        for ind in result.indels:
-            ax_gap.plot([ind.coord, ind.coord], [0, ymax * 0.18], color="#6a3d9a", lw=1.0, alpha=0.8)
+        # indel ticks belong to the gap track and disappear with it
+        if result.indels:
+            ymax = ax_gap.get_ylim()[1]
+            for ind in result.indels:
+                ax_gap.plot([ind.coord, ind.coord], [0, ymax * 0.18], color="#6a3d9a", lw=1.0, alpha=0.8)
 
     # --- gene track --------------------------------------------------------
     ax_gene = None
-    if n_genes:
-        ax_gene = fig.add_subplot(gs[3], sharex=ax)
+    if show_gene:
+        ax_gene = fig.add_subplot(slots["gene"], sharex=ax)
         ax_gene.set_ylim(-1.05, 1.05)
         ax_gene.set_yticks([])
         for side in ("top", "right", "left"):
@@ -1245,7 +1278,7 @@ def build_figure(result: AnalysisResult, opts) -> "object":
                              fontsize=6.2, color="#444", ha="left", va="top")
 
     # --- axes labels -------------------------------------------------------
-    bottom_ax = ax_gene if ax_gene is not None else ax_gap
+    bottom_ax = ax_gene if ax_gene is not None else (ax_gap if ax_gap is not None else ax)
     bottom_ax.set_xlabel(t["pos"].format(name=ref_name), fontsize=9.5)
 
     def fmt_coord(v, _pos):
@@ -1254,32 +1287,38 @@ def build_figure(result: AnalysisResult, opts) -> "object":
     bottom_ax.xaxis.set_major_formatter(FuncFormatter(fmt_coord))
 
     # --- titles and footer -------------------------------------------------
-    if opts.title:
-        title = opts.title
-    elif aln.nseq == 2:
-        title = f"{aln.names[0]} vs {aln.names[1]}"
-    else:
-        title = f"{aln.names[0]} (+{aln.nseq - 1} more)"
-    subtitle_bits = []
-    if aln.nseq > 2:
-        subtitle_bits.append(t["subtitle_multi"].format(nseq=aln.nseq))
-    subtitle_bits.append(t["subtitle_columns"].format(value=result.core_columns))
-    subtitle_bits.append(t["subtitle_identity"].format(value=result.identity_ungapped))
-    ax_head.text(0.0, 0.92, title, fontsize=12.5, fontweight="bold", ha="left", va="top")
-    ax_head.text(0.0, 0.18, "  |  ".join(subtitle_bits), fontsize=8, color="#555", ha="left", va="bottom")
+    if show_head:
+        if show_title:
+            if opts.title:
+                title = opts.title
+            elif aln.nseq == 2:
+                title = f"{names[0]} vs {names[1]}"
+            else:
+                title = f"{names[0]} (+{aln.nseq - 1} more)"
+            ax_head.text(0.0, 0.92, title, fontsize=12, fontweight="bold", ha="left", va="top")
+        if show_subtitle:
+            subtitle_bits = []
+            if aln.nseq > 2:
+                subtitle_bits.append(t["subtitle_multi"].format(nseq=aln.nseq))
+            subtitle_bits.append(t["subtitle_columns"].format(value=result.core_columns))
+            subtitle_bits.append(t["subtitle_identity"].format(value=result.identity_ungapped))
+            y = 0.18 if show_title else 0.55
+            ax_head.text(0.0, y, "  |  ".join(subtitle_bits), fontsize=7.5, color="#555",
+                         ha="left", va="bottom")
 
-    footer = t["footer"].format(
-        window=opts.window,
-        step=opts.step,
-        median=result.identity_ungapped,
-        lead=result.lead_gap,
-        trail=result.trail_gap,
-        source=feature_source_label(result, opts.lang),
-        start=xmin,
-        end=xmax,
-        span=xmax - xmin + 1,
-    )
-    fig.text(0.01, -0.02, footer, fontsize=7, color="#666", ha="left", va="top")
+    if show_footer:
+        footer = t["footer"].format(
+            window=opts.window,
+            step=opts.step,
+            median=result.identity_ungapped,
+            lead=result.lead_gap,
+            trail=result.trail_gap,
+            source=feature_source_label(result, opts.lang) if show_gene else "—",
+            start=xmin,
+            end=xmax,
+            span=xmax - xmin + 1,
+        )
+        fig.text(0.01, -0.02, footer, fontsize=6.5, color="#666", ha="left", va="top")
     return fig
 
 
@@ -1328,6 +1367,108 @@ HOTSPOT_TABLE_NOTE = {
         "the reporting threshold."
     ),
 }
+
+
+# Columns a user may hide; "#" and coordinates always stay.
+HIDEABLE_TABLE_COLUMNS = ("length", "ident_ungapped", "ident_with_gaps", "indel", "region")
+ALWAYS_VISIBLE_TABLE_COLUMNS = ("index", "coords")
+
+
+def visible_table_columns(opts) -> Tuple[str, ...]:
+    """Table columns left after the display switches, in canonical order."""
+    hidden = set(getattr(opts, "hide_table_column", None) or ())
+    if getattr(opts, "no_table_note", False):
+        # The note explains the indel figure, so they are shown or hidden together.
+        hidden.add("indel")
+    if getattr(opts, "no_gene_track", False):
+        hidden.add("region")
+    return tuple(
+        col
+        for col in HOTSPOT_TABLE_COLUMNS
+        if col in ALWAYS_VISIBLE_TABLE_COLUMNS or col not in hidden
+    )
+
+
+def display_options(
+    *,
+    fig_title: bool = True,
+    fig_subtitle: bool = True,
+    gap_track: bool = True,
+    gene_track: bool = True,
+    fig_footer: bool = True,
+    table_title: bool = True,
+    table_subtitle: bool = True,
+    table_note: bool = True,
+    col_length: bool = True,
+    col_ident_ungapped: bool = True,
+    col_ident_gaps: bool = True,
+    col_indel: bool = True,
+    col_region: bool = True,
+) -> Dict[str, object]:
+    """Map positive "show it" switches onto the negative CLI flags.
+
+    Keeping this pure lets the GUI build parser-compatible options without
+    duplicating the flag names.
+    """
+    hidden = []
+    if not col_length:
+        hidden.append("length")
+    if not col_ident_ungapped:
+        hidden.append("ident_ungapped")
+    if not col_ident_gaps:
+        hidden.append("ident_with_gaps")
+    if not col_indel:
+        hidden.append("indel")
+    if not col_region:
+        hidden.append("region")
+    return {
+        "no_title": not fig_title,
+        "no_subtitle": not fig_subtitle,
+        "no_gap_track": not gap_track,
+        "no_gene_track": not gene_track,
+        "no_footer": not fig_footer,
+        "no_table_title": not table_title,
+        "no_table_subtitle": not table_subtitle,
+        "no_table_note": not table_note,
+        "hide_table_column": hidden,
+    }
+
+
+def parse_aliases(pairs: Optional[Sequence[str]]) -> Dict[str, str]:
+    """Turn ``["old=new", ...]`` into a mapping, keeping any ``=`` inside the alias."""
+    aliases: Dict[str, str] = {}
+    for item in pairs or ():
+        if "=" not in item:
+            raise ValueError(f"--alias expects NAME=ALIAS, got {item!r}")
+        old, new = item.split("=", 1)
+        old, new = old.strip(), new.strip()
+        if not old or not new:
+            raise ValueError(f"--alias expects NAME=ALIAS, got {item!r}")
+        aliases[old] = new
+    return aliases
+
+
+def sequence_aliases(opts) -> Dict[str, str]:
+    aliases = getattr(opts, "aliases", None)
+    if aliases is not None:
+        return aliases
+    return parse_aliases(getattr(opts, "alias", None))
+
+
+def display_names(result: AnalysisResult, opts) -> List[str]:
+    """Sequence names as they should appear in figures, tables and Markdown."""
+    aliases = sequence_aliases(opts)
+    return [aliases.get(name, name) for name in result.alignment.names]
+
+
+def display_name(result: AnalysisResult, index: int, opts) -> str:
+    aliases = sequence_aliases(opts)
+    return aliases.get(result.alignment.names[index], result.alignment.names[index])
+
+
+def unused_aliases(result: AnalysisResult, opts) -> List[str]:
+    known = set(result.alignment.names)
+    return [name for name in sequence_aliases(opts) if name not in known]
 
 
 def hotspot_region(result: AnalysisResult, hotspot: Hotspot) -> str:
@@ -1408,69 +1549,102 @@ def write_windows_tsv(result: AnalysisResult, path: str) -> None:
 
 def hotspot_context(result: AnalysisResult, opts, lang: str = "en") -> str:
     aln = result.alignment
-    names = f"{aln.names[0]} vs {aln.names[1] if aln.nseq > 1 else ''}"
+    shown = display_names(result, opts)
+    names = f"{shown[0]} vs {shown[1] if aln.nseq > 1 else ''}"
     span = result.coord_max - result.coord_min + 1
+    with_genes = not getattr(opts, "no_gene_track", False)
     if lang == "zh":
-        return (
+        text = (
             f"{names} ｜ 窗口 {opts.window} bp / 步长 {opts.step} bp ｜ "
             f"比较区间 {result.coord_min:,}–{result.coord_max:,}（{span:,} bp）｜ "
-            f"一致度 {result.identity_ungapped:.1f}% ｜ 基因来源 {feature_source_label(result, 'zh')}"
+            f"一致度 {result.identity_ungapped:.1f}%"
         )
-    return (
+        if with_genes:
+            text += f" ｜ 基因来源 {feature_source_label(result, 'zh')}"
+        return text
+    text = (
         f"{names} | window {opts.window} bp / step {opts.step} bp | "
         f"compared {result.coord_min:,}-{result.coord_max:,} ({span:,} bp) | "
-        f"identity {result.identity_ungapped:.1f}% | genes: {feature_source_label(result, 'en')}"
+        f"identity {result.identity_ungapped:.1f}%"
     )
+    if with_genes:
+        text += f" | genes: {feature_source_label(result, 'en')}"
+    return text
+
+
+def table_cell(row: Dict[str, object], column: str) -> str:
+    """Format one hotspot row cell for the text and figure tables."""
+    if column == "index":
+        return str(row["index"])
+    if column == "coords":
+        return str(row["coords"])
+    if column == "length":
+        return str(row["length"])
+    if column == "ident_ungapped":
+        return f"{row['ident_ungapped']:.2f}"
+    if column == "ident_with_gaps":
+        return f"{row['ident_with_gaps']:.2f}"
+    if column == "indel":
+        return str(row["indel"])
+    if column == "region":
+        return str(row["region"])
+    raise KeyError(column)
 
 
 def write_hotspot_markdown(result: AnalysisResult, path: str, opts, lang: str = "en") -> None:
-    headers = HOTSPOT_TABLE_HEADERS.get(lang, HOTSPOT_TABLE_HEADERS["en"])
+    headers_all = HOTSPOT_TABLE_HEADERS.get(lang, HOTSPOT_TABLE_HEADERS["en"])
+    header_of = dict(zip(HOTSPOT_TABLE_COLUMNS, headers_all))
+    columns = visible_table_columns(opts)
+    headers = [header_of[col] for col in columns]
     rows = hotspot_rows(result, lang)
     aln = result.alignment
-    title = "低保守区" if lang == "zh" else "Low-conservation regions"
-    lines: List[str] = [f"# {title}", ""]
-    lines.append(f"- " + ("比对" if lang == "zh" else "Alignment") + f": `{aln.names[0]}` vs `{aln.names[1] if aln.nseq > 1 else ''}`")
-    lines.append(
-        f"- " + ("坐标序列" if lang == "zh" else "Coordinate sequence")
-        + f": `{aln.names[result.coords_seq]}`"
-    )
-    lines.append(
-        f"- " + ("比较区间" if lang == "zh" else "Compared region")
-        + f": {result.coord_min:,}–{result.coord_max:,} "
-        f"({result.coord_max - result.coord_min + 1:,} bp)"
-    )
-    lines.append(
-        f"- " + ("窗口 / 步长" if lang == "zh" else "Window / step")
-        + f": {opts.window} bp / {opts.step} bp"
-    )
-    lines.append(
-        f"- " + ("总体一致度" if lang == "zh" else "Overall identity")
-        + f": {result.identity_ungapped:.1f}% "
-        + ("(不计 gap)" if lang == "zh" else "(gap-free)")
-    )
-    lines.append(
-        f"- " + ("基因来源" if lang == "zh" else "Gene source")
-        + f": {feature_source_label(result, lang)}"
-    )
-    lines.append("")
+    shown = display_names(result, opts)
+
+    lines: List[str] = []
+    if not getattr(opts, "no_table_title", False):
+        title = "低保守区" if lang == "zh" else "Low-conservation regions"
+        lines.extend([f"# {title}", ""])
+
+    if not getattr(opts, "no_table_subtitle", False):
+        lines.append(f"- " + ("比对" if lang == "zh" else "Alignment")
+                     + f": `{shown[0]}` vs `{shown[1] if aln.nseq > 1 else ''}`")
+        lines.append(
+            "- " + ("坐标序列" if lang == "zh" else "Coordinate sequence")
+            + f": `{shown[result.coords_seq]}`"
+        )
+        lines.append(
+            "- " + ("比较区间" if lang == "zh" else "Compared region")
+            + f": {result.coord_min:,}–{result.coord_max:,} "
+            f"({result.coord_max - result.coord_min + 1:,} bp)"
+        )
+        lines.append(
+            "- " + ("窗口 / 步长" if lang == "zh" else "Window / step")
+            + f": {opts.window} bp / {opts.step} bp"
+        )
+        lines.append(
+            "- " + ("总体一致度" if lang == "zh" else "Overall identity")
+            + f": {result.identity_ungapped:.1f}% "
+            + ("(不计 gap)" if lang == "zh" else "(gap-free)")
+        )
+        if not getattr(opts, "no_gene_track", False):
+            lines.append(
+                "- " + ("基因来源" if lang == "zh" else "Gene source")
+                + f": {feature_source_label(result, lang)}"
+            )
+        lines.append("")
+
     lines.append("| " + " | ".join(headers) + " |")
     lines.append("|" + "|".join(["---"] * len(headers)) + "|")
     if rows:
         for row in rows:
-            cells = [
-                str(row["index"]),
-                row["coords"],
-                str(row["length"]),
-                f"{row['ident_ungapped']:.2f}",
-                f"{row['ident_with_gaps']:.2f}",
-                str(row["indel"]),
-                str(row["region"]),
-            ]
-            lines.append("| " + " | ".join(cells) + " |")
+            lines.append("| " + " | ".join(table_cell(row, col) for col in columns) + " |")
     else:
         lines.append("| " + " | ".join(["—"] * len(headers)) + " |")
-    lines.append("")
-    lines.append(HOTSPOT_TABLE_NOTE.get(lang, HOTSPOT_TABLE_NOTE["en"]))
+
+    if not getattr(opts, "no_table_note", False):
+        lines.append("")
+        lines.append(HOTSPOT_TABLE_NOTE.get(lang, HOTSPOT_TABLE_NOTE["en"]))
+
     lines.append("")
     lines.append(
         "```bash\n"
@@ -1488,11 +1662,26 @@ def build_hotspot_table_figures(
     """Render the hotspot table as one or more matplotlib pages."""
     from matplotlib.figure import Figure
 
-    headers = HOTSPOT_TABLE_HEADERS.get(lang, HOTSPOT_TABLE_HEADERS["en"])
+    headers_all = HOTSPOT_TABLE_HEADERS.get(lang, HOTSPOT_TABLE_HEADERS["en"])
+    header_of = dict(zip(HOTSPOT_TABLE_COLUMNS, headers_all))
+    columns = visible_table_columns(opts)
+    headers = [header_of[col] for col in columns]
     rows = hotspot_rows(result, lang)
     heading = "低保守区一览" if lang == "zh" else "Low-conservation regions"
     subtitle = hotspot_context(result, opts, lang)
     note = HOTSPOT_TABLE_NOTE.get(lang, HOTSPOT_TABLE_NOTE["en"])
+    show_title = not getattr(opts, "no_table_title", False)
+    show_subtitle = not getattr(opts, "no_table_subtitle", False)
+    show_note = not getattr(opts, "no_table_note", False)
+
+    # Column widths follow the same proportions, renormalised to the visible set.
+    base_widths = {
+        "index": 0.06, "coords": 0.15, "length": 0.10,
+        "ident_ungapped": 0.17, "ident_with_gaps": 0.17, "indel": 0.20, "region": 0.15,
+    }
+    weights = [base_widths.get(col, 0.12) for col in columns]
+    total_weight = sum(weights) or 1.0
+    col_widths = [w / total_weight for w in weights]
 
     pages: List["object"] = []
     chunks = [rows[i : i + rows_per_page] for i in range(0, len(rows), rows_per_page)] or [[]]
@@ -1500,41 +1689,35 @@ def build_hotspot_table_figures(
         fig = Figure(figsize=(11.0, 6.6), dpi=opts.dpi, layout="constrained")
         ax = fig.add_subplot(111)
         ax.axis("off")
-        title = heading if len(chunks) == 1 else f"{heading} ({page_index}/{len(chunks)})"
-        ax.set_title(title, loc="left", fontsize=13, fontweight="bold", pad=14)
-        ax.text(
-            0.0, 1.0, subtitle, transform=ax.transAxes, fontsize=7.5, color="#555",
-            va="bottom", ha="left",
-        )
+
+        if show_title:
+            title = heading if len(chunks) == 1 else f"{heading} ({page_index}/{len(chunks)})"
+            ax.set_title(title, loc="left", fontsize=13, fontweight="bold", pad=14)
+        if show_subtitle:
+            ax.text(
+                0.0, 1.0, subtitle, transform=ax.transAxes, fontsize=7.5, color="#555",
+                va="bottom", ha="left",
+            )
 
         table_rows = [list(headers)] + [
-            [
-                str(r["index"]),
-                str(r["coords"]),
-                str(r["length"]),
-                f"{r['ident_ungapped']:.2f}",
-                f"{r['ident_with_gaps']:.2f}",
-                str(r["indel"]),
-                str(r["region"]),
-            ]
-            for r in chunk
+            [table_cell(r, col) for col in columns] for r in chunk
         ]
         if not chunk:
             table_rows.append(["—"] * len(headers))
 
+        top = 0.90 if (show_title or show_subtitle) else 0.98
         n_rows = len(table_rows)
-        row_h = min(0.075, 0.78 / n_rows)
+        row_h = min(0.075, (top - 0.10) / max(1, n_rows))
         table_h = row_h * n_rows
         table = ax.table(
             cellText=table_rows[1:],
             colLabels=table_rows[0],
             cellLoc="center",
             colLoc="center",
-            bbox=[0.0, 0.90 - table_h, 1.0, table_h],
+            bbox=[0.0, top - table_h, 1.0, table_h],
         )
         table.auto_set_font_size(False)
         table.set_fontsize(8.5 if n_rows > 12 else 9.5)
-        col_widths = [0.06, 0.15, 0.10, 0.17, 0.17, 0.20, 0.15]
         for (row_idx, col_idx), cell in table.get_celld().items():
             cell.set_edgecolor("#cccccc")
             if col_idx < len(col_widths):
@@ -1545,7 +1728,8 @@ def build_hotspot_table_figures(
             elif row_idx % 2 == 0:
                 cell.set_facecolor("#fafafa")
 
-        ax.text(0.0, 0.02, note, transform=ax.transAxes, fontsize=7, color="#666", va="bottom")
+        if show_note:
+            ax.text(0.0, 0.02, note, transform=ax.transAxes, fontsize=7, color="#666", va="bottom")
         pages.append(fig)
     return pages
 
@@ -1582,8 +1766,11 @@ def save_pdf_bundle(
 
 def summary_dict(result: AnalysisResult, opts) -> Dict[str, object]:
     aln = result.alignment
+    aliases = sequence_aliases(opts)
     return {
         "sequences": aln.names,
+        "sequence_aliases": aliases,
+        "display_names": display_names(result, opts),
         "source_format": aln.source_format,
         "alignment_columns": aln.ncol,
         "coordinate_sequence": aln.names[result.coords_seq],
@@ -1640,15 +1827,21 @@ def _fmt_num(value: float) -> str:
 
 def print_report(result: AnalysisResult, opts) -> None:
     aln = result.alignment
+    aliases = sequence_aliases(opts)
+    shown = display_names(result, opts)
+    sequence_label = ", ".join(
+        f"{display} ({original})" if display != original else display
+        for display, original in zip(shown, aln.names)
+    )
     print("=" * 72)
-    print(f"sequences        : {', '.join(aln.names)}")
+    print(f"sequences        : {sequence_label}")
     print(f"format           : {aln.source_format}")
     print(f"alignment columns: {aln.ncol:,}")
     print(
         f"terminal gaps    : {result.lead_gap:,} (5') / {result.trail_gap:,} (3')"
     )
     print(
-        f"compared         : {aln.names[result.coords_seq]} "
+        f"compared         : {shown[result.coords_seq]} "
         f"{result.coord_min:,}-{result.coord_max:,} ({result.coord_max - result.coord_min + 1:,} bp)"
     )
     print(
@@ -1740,6 +1933,36 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="append the hotspot table pages to the PDF (figure stays on page 1)",
     )
+    p.add_argument(
+        "--alias",
+        action="append",
+        default=[],
+        metavar="NAME=ALIAS",
+        help="display alias for a sequence name (repeatable)",
+    )
+    p.add_argument("--no-title", action="store_true", help="hide the figure title")
+    p.add_argument("--no-subtitle", action="store_true", help="hide the figure subtitle")
+    p.add_argument("--no-gap-track", action="store_true", help="hide the gap%% track")
+    p.add_argument(
+        "--no-gene-track",
+        action="store_true",
+        help="hide the gene track; annotation is not loaded and the Region column is dropped",
+    )
+    p.add_argument("--no-footer", action="store_true", help="hide the figure footer note")
+    p.add_argument("--no-table-title", action="store_true", help="hide the table title")
+    p.add_argument("--no-table-subtitle", action="store_true", help="hide the table subtitle")
+    p.add_argument(
+        "--hide-table-column",
+        action="append",
+        default=[],
+        choices=list(HIDEABLE_TABLE_COLUMNS),
+        help="hide a table column (repeatable)",
+    )
+    p.add_argument(
+        "--no-table-note",
+        action="store_true",
+        help="hide the table note and the Indel %% column together",
+    )
     p.add_argument("--top", type=int, default=10, help="number of hotspots to print")
     p.add_argument("--gui", action="store_true", help="launch the Tkinter GUI")
     p.add_argument("--version", action="version", version="align_conservation_plot 1.0")
@@ -1791,6 +2014,8 @@ def run_cli(args) -> int:
 
 def _run_cli_inner(args, out: str) -> int:
     configure_matplotlib(args.lang)
+    # Validate the alias syntax before doing any expensive work.
+    args.aliases = parse_aliases(getattr(args, "alias", None))
     aln = read_alignment(args.input)
     result = analyse(
         aln,
@@ -1802,18 +2027,25 @@ def _run_cli_inner(args, out: str) -> int:
         hotspot_pct=args.hotspot_pct,
         keep_terminal_gaps=args.keep_terminal_gaps,
     )
-    attach_features(
-        result,
-        args.annotation,
-        args.annotation_format,
-        args.record,
-        args.min_orf_aa,
-        annotation_options={
-            "timeout": args.annotation_timeout,
-            "use_cache": not args.no_annotation_cache,
-            "refresh": args.refresh_annotation,
-        },
-    )
+    if getattr(args, "no_gene_track", False):
+        # The track is hidden, so do not read the annotation at all.
+        result.features = []
+        result.feature_source = "none"
+    else:
+        attach_features(
+            result,
+            args.annotation,
+            args.annotation_format,
+            args.record,
+            args.min_orf_aa,
+            annotation_options={
+                "timeout": args.annotation_timeout,
+                "use_cache": not args.no_annotation_cache,
+                "refresh": args.refresh_annotation,
+            },
+        )
+    for name in unused_aliases(result, args):
+        print(f"warning: alias for unknown sequence {name!r} ignored", file=sys.stderr)
     for warning in result.warnings:
         print(f"warning: {warning}", file=sys.stderr)
     print_report(result, args)
@@ -1854,6 +2086,23 @@ GUI_TEXT = {
         "lbl_hotspot_pct": "热点百分位 (空=用 k)",
         "lbl_title": "标题（可空）",
         "chk_trim": "剔除两端全 gap 列",
+        "chk_gene_track": "基因轨道",
+        "sec_alias": "序列别名（每行 原名=别名，可留空）",
+        "sec_display": "显示开关",
+        "chk_fig_title": "图标题",
+        "chk_fig_subtitle": "图副标题",
+        "chk_gap_track": "gap 轨道",
+        "chk_footer": "图注释行",
+        "chk_table_title": "表标题",
+        "chk_table_subtitle": "表副标题",
+        "chk_table_note": "表注释行",
+        "sec_table_cols": "表格列",
+        "chk_col_length": "长度",
+        "chk_col_ident_ungapped": "一致度(不计gap)",
+        "chk_col_ident_gaps": "一致度(计gap)",
+        "chk_col_indel": "插入或删除 %",
+        "chk_col_region": "所在区域",
+        "hint_alias": "选好比对文件后会自动列出序列名；把等号右边改成想要的显示名即可。",
         "lbl_fig_lang": "图表文字：",
         "lang_zh": "中文",
         "lang_en": "English",
@@ -1914,6 +2163,23 @@ GUI_TEXT = {
         "lbl_hotspot_pct": "Hotspot percentile (empty = k)",
         "lbl_title": "Title (optional)",
         "chk_trim": "Trim terminal all-gap columns",
+        "chk_gene_track": "Gene track",
+        "sec_alias": "Sequence aliases (one name=alias per line, blanks ignored)",
+        "sec_display": "Display switches",
+        "chk_fig_title": "Figure title",
+        "chk_fig_subtitle": "Figure subtitle",
+        "chk_gap_track": "Gap track",
+        "chk_footer": "Figure note",
+        "chk_table_title": "Table title",
+        "chk_table_subtitle": "Table subtitle",
+        "chk_table_note": "Table note",
+        "sec_table_cols": "Table columns",
+        "chk_col_length": "Length",
+        "chk_col_ident_ungapped": "Identity (ungapped)",
+        "chk_col_ident_gaps": "Identity (with gaps)",
+        "chk_col_indel": "Indel %",
+        "chk_col_region": "Region",
+        "hint_alias": "Sequence names appear once a file is chosen; edit the right-hand side to rename them.",
         "lbl_fig_lang": "Figure text:",
         "lang_zh": "中文",
         "lang_en": "English",
@@ -1973,12 +2239,12 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     configure_matplotlib("zh")
 
     root = tk.Tk()
-    root.geometry("1300x860")
-    root.minsize(1100, 760)
+    root.geometry("1380x880")
+    root.minsize(1080, 680)
     try:
-        tkfont.nametofont("TkDefaultFont").configure(family="PingFang SC", size=12)
-        tkfont.nametofont("TkTextFont").configure(family="PingFang SC", size=12)
-        tkfont.nametofont("TkMenuFont").configure(family="PingFang SC", size=12)
+        tkfont.nametofont("TkDefaultFont").configure(family="PingFang SC", size=10)
+        tkfont.nametofont("TkTextFont").configure(family="PingFang SC", size=10)
+        tkfont.nametofont("TkMenuFont").configure(family="PingFang SC", size=10)
     except Exception:
         pass
 
@@ -2002,7 +2268,22 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         "exp_pdf_fig": tk.BooleanVar(value=False),
         "exp_pdf_table": tk.BooleanVar(value=False),
         "png_dpi": tk.StringVar(value="300"),
+        "gene_track": tk.BooleanVar(value=True),
+        "fig_title": tk.BooleanVar(value=True),
+        "fig_subtitle": tk.BooleanVar(value=True),
+        "gap_track": tk.BooleanVar(value=True),
+        "fig_footer": tk.BooleanVar(value=True),
+        "table_title": tk.BooleanVar(value=True),
+        "table_subtitle": tk.BooleanVar(value=True),
+        "table_note": tk.BooleanVar(value=True),
+        "col_length": tk.BooleanVar(value=True),
+        "col_ident_ungapped": tk.BooleanVar(value=True),
+        "col_ident_gaps": tk.BooleanVar(value=True),
+        "col_indel": tk.BooleanVar(value=True),
+        "col_region": tk.BooleanVar(value=True),
     }
+    alias_text: "tk.Text"
+
     gui_lang = {"value": "en"}
     task_queue: "queue.Queue[tuple]" = queue.Queue()
     registry: List[Tuple[object, str, str]] = []
@@ -2018,8 +2299,63 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         except tk.TclError:
             pass
 
-    left = ttk.Frame(root, padding=(10, 10, 6, 8))
-    left.pack(side="left", fill="y")
+    # The control panel scrolls: with every switch on it is taller than a laptop screen.
+    left_outer = ttk.Frame(root, padding=(8, 8, 4, 8))
+    left_outer.pack(side="left", fill="y")
+    left_canvas = tk.Canvas(left_outer, width=478, highlightthickness=0, borderwidth=0)
+    left_scroll = ttk.Scrollbar(left_outer, orient="vertical", command=left_canvas.yview)
+    left_canvas.configure(yscrollcommand=left_scroll.set)
+    left_scroll.pack(side="right", fill="y")
+    left_canvas.pack(side="left", fill="y", expand=True)
+    left = ttk.Frame(left_canvas, padding=(10, 4, 12, 8))
+    left_window = left_canvas.create_window((0, 0), window=left, anchor="nw")
+    def _fit_panel(_event=None):
+        left_canvas.configure(scrollregion=left_canvas.bbox("all"))
+        needed = min(left.winfo_reqwidth() + 22, 560)
+        if abs(int(left_canvas.cget("width")) - needed) > 2:
+            left_canvas.configure(width=needed)
+
+    left.bind("<Configure>", _fit_panel)
+    left_canvas.bind(
+        "<Configure>",
+        lambda e: left_canvas.itemconfigure(left_window, width=e.width),
+    )
+
+    def _scroll_pixels(pixels: float) -> None:
+        """Scroll the panel by pixels; canvas "units" are too coarse for trackpads."""
+        total = max(1, left.winfo_height())
+        first, _last = left_canvas.yview()
+        target = first * total + pixels
+        left_canvas.yview_moveto(max(0.0, min(1.0, target / total)))
+
+    def _on_wheel(event):
+        delta = getattr(event, "delta", 0)
+        if not delta:
+            return "break"
+        # macOS sends small deltas (trackpads send fractions), Windows sends
+        # multiples of 120.
+        pixels = -delta * 15.0 if abs(delta) <= 10 else -delta / 120.0 * 36.0
+        _scroll_pixels(pixels)
+        return "break"
+
+    def _on_wheel_up(_event):
+        _scroll_pixels(-36)
+        return "break"
+
+    def _on_wheel_down(_event):
+        _scroll_pixels(36)
+        return "break"
+
+    def bind_wheel(widget):
+        """Wheel events go to the widget under the pointer, not its parent."""
+        widget.bind("<MouseWheel>", _on_wheel)
+        widget.bind("<Button-4>", _on_wheel_up)
+        widget.bind("<Button-5>", _on_wheel_down)
+        for child in widget.winfo_children():
+            bind_wheel(child)
+
+    bind_wheel(left_canvas)
+
     left.grid_columnconfigure(0, minsize=175)
     right = ttk.Frame(root, padding=(4, 8, 8, 8))
     right.pack(side="right", fill="both", expand=True)
@@ -2027,7 +2363,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     row = 0
     header = ttk.Frame(left)
     header.grid(row=row, column=0, columnspan=3, sticky="we", pady=(0, 2))
-    title_label = ttk.Label(header, font=("PingFang SC", 14, "bold"))
+    title_label = ttk.Label(header, font=("PingFang SC", 11, "bold"))
     title_label.pack(side="left")
     register(title_label, "app_title")
     switch_btn = ttk.Button(header, width=16)
@@ -2035,7 +2371,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     register(switch_btn, "btn_switch_lang")
     row += 1
 
-    sec_input = ttk.Label(left, font=("PingFang SC", 11, "bold"))
+    sec_input = ttk.Label(left, font=("PingFang SC", 9, "bold"))
     sec_input.grid(row=row, column=0, columnspan=3, sticky="w", pady=(4, 2))
     register(sec_input, "sec_input")
     row += 1
@@ -2058,19 +2394,25 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         )
         if path:
             state["input"].set(path)
+            fill_aliases()
 
     browse_in = ttk.Button(left, width=8, command=pick_input)
     browse_in.grid(row=row, column=2, padx=(4, 0))
     register(browse_in, "btn_browse")
     row += 1
 
-    lbl_annotation = ttk.Label(left, anchor="w")
-    lbl_annotation.grid(row=row, column=0, columnspan=3, sticky="w", pady=(8, 0))
+    # The gene-track switch lives with the annotation input it controls.
+    ann_head = ttk.Frame(left)
+    ann_head.grid(row=row, column=0, columnspan=3, sticky="w", pady=(8, 0))
+    gene_chk = ttk.Checkbutton(ann_head, variable=state["gene_track"])
+    gene_chk.pack(side="left")
+    register(gene_chk, "chk_gene_track")
+    lbl_annotation = ttk.Label(ann_head)
+    lbl_annotation.pack(side="left", padx=(8, 0))
     register(lbl_annotation, "lbl_annotation")
     row += 1
-    ttk.Entry(left, textvariable=state["annotation"], width=26).grid(
-        row=row, column=0, columnspan=2, sticky="we", pady=3
-    )
+    anno_entry = ttk.Entry(left, textvariable=state["annotation"], width=26)
+    anno_entry.grid(row=row, column=0, columnspan=2, sticky="we", pady=3)
 
     def pick_annotation():
         path = filedialog.askopenfilename(
@@ -2087,37 +2429,83 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     browse_ann.grid(row=row, column=2, padx=(4, 0))
     register(browse_ann, "btn_browse")
     row += 1
-    hint = ttk.Label(left, foreground="#777", wraplength=300, font=("PingFang SC", 9))
+    hint = ttk.Label(left, foreground="#777", wraplength=320, font=("PingFang SC", 8))
     hint.grid(row=row, column=0, columnspan=3, sticky="w")
     register(hint, "hint_annotation")
     row += 1
 
+    # --- sequence aliases --------------------------------------------------
+    sec_alias = ttk.Label(left, font=("PingFang SC", 9, "bold"))
+    sec_alias.grid(row=row, column=0, columnspan=3, sticky="w", pady=(8, 0))
+    register(sec_alias, "sec_alias")
+    row += 1
+    alias_box = ttk.Frame(left)
+    alias_box.grid(row=row, column=0, columnspan=3, sticky="we")
+    alias_text = tk.Text(
+        alias_box,
+        height=3,
+        width=20,
+        wrap="none",
+        font=("PingFang SC", 9),
+        relief="solid",
+        borderwidth=1,
+        highlightthickness=0,
+        padx=4,
+        pady=2,
+    )
+    alias_scroll = ttk.Scrollbar(alias_box, orient="vertical", command=alias_text.yview)
+    alias_text.configure(yscrollcommand=alias_scroll.set)
+    alias_text.pack(side="left", fill="both", expand=True)
+    alias_scroll.pack(side="right", fill="y")
+    row += 1
+    alias_hint = ttk.Label(left, foreground="#777", wraplength=320, font=("PingFang SC", 8))
+    alias_hint.grid(row=row, column=0, columnspan=3, sticky="w")
+    register(alias_hint, "hint_alias")
+    row += 1
+
+    def fill_aliases():
+        path = state["input"].get().strip()
+        names = read_sequence_names(path) if path else []
+        alias_text.delete("1.0", "end")
+        alias_text.insert("1.0", "\n".join(f"{name}=" for name in names))
+
+    def read_alias_text() -> dict:
+        pairs = []
+        for line in alias_text.get("1.0", "end").splitlines():
+            line = line.strip()
+            if line and "=" in line:
+                pairs.append(line)
+        return parse_aliases(pairs)
+
     ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
     row += 1
-    sec_params = ttk.Label(left, font=("PingFang SC", 11, "bold"))
+    sec_params = ttk.Label(left, font=("PingFang SC", 9, "bold"))
     sec_params.grid(row=row, column=0, columnspan=3, sticky="w")
     register(sec_params, "sec_params")
     row += 1
 
-    def labelled_entry(parent, row_index, key, var, width=12):
+    def labelled_entry(parent, row_index, key, var, width=6, col=0, span=1):
+        """One label/entry pair; two pairs fit side by side now the fonts are smaller."""
         label = ttk.Label(parent, anchor="w")
-        label.grid(row=row_index, column=0, sticky="w", pady=1)
+        label.grid(row=row_index, column=col, sticky="w", pady=1, padx=(0, 6))
         register(label, key)
         ttk.Entry(parent, textvariable=var, width=width).grid(
-            row=row_index, column=1, columnspan=2, sticky="we", pady=1
+            row=row_index, column=col + 1, columnspan=span, sticky="we", pady=1, padx=(0, 12)
         )
 
-    for key, var in (
-        ("lbl_coords", state["coords_seq"]),
-        ("lbl_window", state["window"]),
-        ("lbl_step", state["step"]),
-        ("lbl_indel_min", state["indel_min"]),
-        ("lbl_hotspot_k", state["hotspot_k"]),
-        ("lbl_hotspot_pct", state["hotspot_pct"]),
-    ):
-        labelled_entry(left, row, key, var)
-        row += 1
-    labelled_entry(left, row, "lbl_title", state["title"], width=26)
+    params_top = ttk.Frame(left)
+    params_top.grid(row=row, column=0, columnspan=3, sticky="we")
+    # Longest labels go in the first column of each row so the shared column
+    # width stays small and the two pairs fit on one line.
+    for pair_row, (left_key, left_var, right_key, right_var) in enumerate((
+        ("lbl_coords", state["coords_seq"], "lbl_window", state["window"]),
+        ("lbl_indel_min", state["indel_min"], "lbl_step", state["step"]),
+        ("lbl_hotspot_pct", state["hotspot_pct"], "lbl_hotspot_k", state["hotspot_k"]),
+    )):
+        labelled_entry(params_top, pair_row, left_key, left_var, col=0)
+        labelled_entry(params_top, pair_row, right_key, right_var, col=2)
+    row += 1
+    labelled_entry(left, row, "lbl_title", state["title"], width=20, span=2)
     row += 1
 
     trim_chk = ttk.Checkbutton(left, variable=state["trim"])
@@ -2138,7 +2526,85 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
 
     ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
     row += 1
-    sec_export = ttk.Label(left, font=("PingFang SC", 11, "bold"))
+
+    # --- display switches --------------------------------------------------
+    sec_display = ttk.Label(left, font=("PingFang SC", 9, "bold"))
+    sec_display.grid(row=row, column=0, columnspan=3, sticky="w")
+    register(sec_display, "sec_display")
+    row += 1
+    display_grid = ttk.Frame(left)
+    display_grid.grid(row=row, column=0, columnspan=3, sticky="w")
+    display_keys = (
+        ("fig_title", "chk_fig_title"),
+        ("fig_subtitle", "chk_fig_subtitle"),
+        ("gap_track", "chk_gap_track"),
+        ("fig_footer", "chk_footer"),
+        ("table_title", "chk_table_title"),
+        ("table_subtitle", "chk_table_subtitle"),
+        ("table_note", "chk_table_note"),
+    )
+    display_checks = {}
+    for i, (var_key, label_key) in enumerate(display_keys):
+        chk = ttk.Checkbutton(display_grid, variable=state[var_key])
+        chk.grid(row=i // 3, column=i % 3, sticky="w", padx=(0, 10))
+        register(chk, label_key)
+        display_checks[var_key] = chk
+    row += 1
+
+    # --- table columns -----------------------------------------------------
+    sec_cols = ttk.Label(left, font=("PingFang SC", 9, "bold"))
+    sec_cols.grid(row=row, column=0, columnspan=3, sticky="w", pady=(4, 0))
+    register(sec_cols, "sec_table_cols")
+    row += 1
+    cols_grid = ttk.Frame(left)
+    cols_grid.grid(row=row, column=0, columnspan=3, sticky="w")
+    column_checks = {}
+    for i, (var_key, label_key) in enumerate((
+        ("col_length", "chk_col_length"),
+        ("col_ident_ungapped", "chk_col_ident_ungapped"),
+        ("col_ident_gaps", "chk_col_ident_gaps"),
+        ("col_indel", "chk_col_indel"),
+        ("col_region", "chk_col_region"),
+    )):
+        chk = ttk.Checkbutton(cols_grid, variable=state[var_key])
+        chk.grid(row=i // 3, column=i % 3, sticky="w", padx=(0, 10))
+        register(chk, label_key)
+        column_checks[var_key] = chk
+    row += 1
+
+    region_last = {"value": True}
+
+    def sync_gene_dependent_widgets():
+        """Gene track off: no annotation input and no Region column."""
+        on = state["gene_track"].get()
+        anno_entry.configure(state="normal" if on else "disabled")
+        browse_ann.configure(state="normal" if on else "disabled")
+        region_chk = column_checks["col_region"]
+        if on:
+            region_chk.configure(state="normal")
+            state["col_region"].set(region_last["value"])
+        else:
+            region_last["value"] = state["col_region"].get()
+            state["col_region"].set(False)
+            region_chk.configure(state="disabled")
+
+    def sync_note_and_indel(*_args):
+        """The table note and the Indel % column are shown or hidden together."""
+        on = state["table_note"].get()
+        state["col_indel"].set(on)
+        column_checks["col_indel"].configure(state="normal" if on else "disabled")
+
+    state["gene_track"].trace_add("write", lambda *_: sync_gene_dependent_widgets())
+    state["table_note"].trace_add("write", sync_note_and_indel)
+    def sync_note_from_indel(*_args):
+        if state["col_indel"].get():
+            state["table_note"].set(True)
+
+    state["col_indel"].trace_add("write", sync_note_from_indel)
+
+    ttk.Separator(left, orient="horizontal").grid(row=row, column=0, columnspan=3, sticky="we", pady=4)
+    row += 1
+    sec_export = ttk.Label(left, font=("PingFang SC", 9, "bold"))
     sec_export.grid(row=row, column=0, columnspan=3, sticky="w")
     register(sec_export, "sec_export")
     row += 1
@@ -2216,6 +2682,14 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     placeholder.pack(expand=True)
     register(placeholder, "placeholder")
 
+    table_head = ttk.Frame(tab_table)
+    table_head.pack(fill="x", padx=8, pady=(8, 0))
+    table_title_label = ttk.Label(table_head, font=("PingFang SC", 11, "bold"), anchor="w")
+    table_title_label.pack(fill="x")
+    table_subtitle_label = ttk.Label(table_head, foreground="#555", anchor="w",
+                                     font=("PingFang SC", 8), wraplength=760)
+    table_subtitle_label.pack(fill="x")
+
     table_holder = ttk.Frame(tab_table)
     table_holder.pack(fill="both", expand=True, padx=6, pady=6)
     tree = ttk.Treeview(
@@ -2229,7 +2703,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
               "ident_with_gaps": 115, "indel": 175, "region": 120}
     for col in HOTSPOT_TABLE_COLUMNS:
         tree.column(col, width=widths.get(col, 120), anchor="center", stretch=True)
-    table_note = ttk.Label(tab_table, foreground="#666", wraplength=760, font=("PingFang SC", 10))
+    table_note = ttk.Label(tab_table, foreground="#666", wraplength=760, font=("PingFang SC", 9))
     table_note.pack(fill="x", padx=8, pady=(0, 8))
     empty_label = ttk.Label(tab_table, foreground="#888")
     register(empty_label, "table_empty")
@@ -2248,6 +2722,61 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         for col, header in zip(HOTSPOT_TABLE_COLUMNS, headers):
             tree.heading(col, text=header)
         table_note.configure(text=HOTSPOT_TABLE_NOTE.get(table_lang(), HOTSPOT_TABLE_NOTE["en"]))
+        table_title_label.configure(
+            text="低保守区一览" if table_lang() == "zh" else "Low-conservation regions"
+        )
+
+    def collect_display_opts() -> dict:
+        """Display switches as parser-compatible option values."""
+        return display_options(
+            fig_title=state["fig_title"].get(),
+            fig_subtitle=state["fig_subtitle"].get(),
+            gap_track=state["gap_track"].get(),
+            gene_track=state["gene_track"].get(),
+            fig_footer=state["fig_footer"].get(),
+            table_title=state["table_title"].get(),
+            table_subtitle=state["table_subtitle"].get(),
+            table_note=state["table_note"].get(),
+            col_length=state["col_length"].get(),
+            col_ident_ungapped=state["col_ident_ungapped"].get(),
+            col_ident_gaps=state["col_ident_gaps"].get(),
+            col_indel=state["col_indel"].get(),
+            col_region=state["col_region"].get(),
+        )
+
+    def preview_opts():
+        """Current display switches plus the analysis options behind the last draw."""
+        base = app["args"]
+        if base is None:
+            try:
+                base = current_args()
+            except Exception:  # noqa: BLE001 - preview must never crash
+                base = build_parser().parse_args([])
+        opts_ns = argparse.Namespace(**vars(base))
+        for key, value in collect_display_opts().items():
+            setattr(opts_ns, key, value)
+        return opts_ns
+
+    def refresh_table_layout():
+        """Apply column visibility, table title/subtitle and the note line."""
+        result = app["result"]
+        opts_like = preview_opts()
+        visible = visible_table_columns(opts_like)
+        tree.configure(displaycolumns=visible)
+        show_title = not opts_like.no_table_title
+        show_subtitle = not opts_like.no_table_subtitle and result is not None
+        # Re-pack in a fixed order; "before=" refuses an unpacked reference.
+        table_title_label.pack_forget()
+        table_subtitle_label.pack_forget()
+        if show_title:
+            table_title_label.pack(fill="x")
+        if show_subtitle:
+            table_subtitle_label.configure(text=hotspot_context(result, opts_like, table_lang()))
+            table_subtitle_label.pack(fill="x")
+        if opts_like.no_table_note:
+            table_note.pack_forget()
+        else:
+            table_note.pack(fill="x", padx=8, pady=(0, 8))
 
     def refresh_table_rows():
         tree.delete(*tree.get_children())
@@ -2283,6 +2812,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         switch_btn.configure(text=text("btn_switch_lang"))
         refresh_table_headers()
         refresh_table_rows()
+        refresh_table_layout()
         if app["result"] is None:
             status.set(text("status_ready"))
         else:
@@ -2302,6 +2832,10 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     switch_btn.configure(command=toggle_language)
     state["lang"].trace_add("write", lambda *_args: refresh_table_headers())
     state["lang"].trace_add("write", lambda *_args: refresh_table_rows())
+    state["lang"].trace_add("write", lambda *_args: refresh_table_layout())
+    for _key in ("col_length", "col_ident_ungapped", "col_ident_gaps", "col_indel",
+                 "col_region", "table_title", "table_subtitle", "table_note"):
+        state[_key].trace_add("write", lambda *_args: refresh_table_layout())
 
     def current_args():
         args = build_parser().parse_args([])
@@ -2321,6 +2855,9 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         args.figsize = None
         args.top = 10
         args.pdf_with_table = True
+        args.aliases = read_alias_text()
+        for key, value in collect_display_opts().items():
+            setattr(args, key, value)
         return args
 
     def draw():
@@ -2350,18 +2887,23 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
                     hotspot_pct=args.hotspot_pct,
                     keep_terminal_gaps=args.keep_terminal_gaps,
                 )
-                attach_features(
-                    result,
-                    args.annotation,
-                    None,
-                    None,
-                    90,
-                    annotation_options={
-                        "timeout": args.annotation_timeout,
-                        "use_cache": not args.no_annotation_cache,
-                        "refresh": args.refresh_annotation,
-                    },
-                )
+                if args.no_gene_track:
+                    # Track hidden: skip the annotation read entirely.
+                    result.features = []
+                    result.feature_source = "none"
+                else:
+                    attach_features(
+                        result,
+                        args.annotation,
+                        None,
+                        None,
+                        90,
+                        annotation_options={
+                            "timeout": args.annotation_timeout,
+                            "use_cache": not args.no_annotation_cache,
+                            "refresh": args.refresh_annotation,
+                        },
+                    )
                 task_queue.put(("ok", result, args))
             except Exception as exc:  # noqa: BLE001
                 err = "".join(traceback.format_exception_only(type(exc), exc)).strip()
@@ -2398,6 +2940,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         export_btn.configure(state="normal")
         refresh_table_headers()
         refresh_table_rows()
+        refresh_table_layout()
         status.set(
             text("status_done").format(
                 nseq=result.alignment.nseq,
@@ -2455,6 +2998,17 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
             return
         stem = os.path.splitext(os.path.basename(state["input"].get()))[0] or "alignment"
         written: List[str] = []
+        # Exports honour the display switches as they are now, not as they were
+        # when the preview was drawn.
+        try:
+            fresh = current_args()
+        except ValueError as exc:
+            messagebox.showerror(text("msg_param_title"), str(exc))
+            return
+        for key, value in collect_display_opts().items():
+            setattr(args, key, value)
+        args.aliases = fresh.aliases
+        args.title = fresh.title
         # Export from a freshly built figure so the file size does not depend on
         # how the preview canvas happened to be resized.
         try:
@@ -2521,6 +3075,11 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
 
     root.protocol("WM_DELETE_WINDOW", on_close)
     apply_language()
+    sync_gene_dependent_widgets()
+    sync_note_and_indel()
+    refresh_table_layout()
+    bind_wheel(left)
+    left_canvas.yview_moveto(0.0)
     root.after(120, poll_tasks)
 
     if self_test is not None:
@@ -2539,6 +3098,17 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
                 "apply_language": apply_language,
                 "toggle_language": toggle_language,
                 "gui_lang": gui_lang,
+                "alias_text": alias_text,
+                "fill_aliases": fill_aliases,
+                "anno_entry": anno_entry,
+                "browse_ann": browse_ann,
+                "column_checks": column_checks,
+                "display_checks": display_checks,
+                "refresh_table_layout": refresh_table_layout,
+                "table_title_label": table_title_label,
+                "table_subtitle_label": table_subtitle_label,
+                "table_note": table_note,
+                "left_canvas": left_canvas,
             }
         )
         root.destroy()

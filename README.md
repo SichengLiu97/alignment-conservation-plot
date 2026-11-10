@@ -84,7 +84,7 @@ follows `--lang`.
 | `-o, --out` | `<input>_conservation.svg` | SVG output path |
 | `--pdf [PATH]` | off | Also write a PDF |
 | `--png [PATH]` | off | Also write a PNG (`--dpi` controls resolution) |
-| `--coords-seq` | `1` | Which sequence provides the coordinate axis (1-based). Usually `2` when aligning to a reference genome |
+| `--coords-seq` | `1` | Which sequence provides the coordinate axis (1-based). Usually set to a reference genome |
 | `--window` / `--step` | `300` / `50` | Window size and step (bp) |
 | `--annotation` | none | Annotation file path, **or an NCBI accession such as `NC_004718.3`** |
 | `--annotation-timeout` | `60` | Online download timeout (seconds) |
@@ -99,11 +99,61 @@ follows `--lang`.
 | `--keep-terminal-gaps` | off | Keep terminal all-gap columns (trimmed by default) |
 | `--lang` | `en` | Figure text language; `zh` switches to PingFang SC |
 | `--stats-out` | none | Write the per-window statistics TSV |
+| `--alias NAME=ALIAS` | none | Display alias for a sequence name (repeatable) |
+| `--no-title` | off | Hide the figure title |
+| `--no-subtitle` | off | Hide the figure subtitle |
+| `--no-gap-track` | off | Hide the gap% track (its indel ticks go with it) |
+| `--no-gene-track` | off | Hide the gene track; annotation is not loaded and the Region column is dropped |
+| `--no-footer` | off | Hide the figure's bottom note |
+| `--no-table-title` | off | Hide the table title |
+| `--no-table-subtitle` | off | Hide the table subtitle |
+| `--hide-table-column COL` | none | Hide `length` / `ident_ungapped` / `ident_with_gaps` / `indel` / `region` (repeatable) |
+| `--no-table-note` | off | Hide the table note and the Indel % column together |
 | `--summary-out` | none | Write a JSON summary |
 | `--hotspot-table-md` | none | Write the low-conservation table as Markdown |
 | `--pdf-with-table` | off | Append the hotspot table pages to the PDF (figure stays on page 1) |
 | `--figsize W H` | automatic | Figure size in inches |
 | `--gui` | — | Launch the graphical interface |
+
+## Layout control
+
+Every part of the figure and the table can be switched off, and sequence names
+can be relabelled without touching the alignment file.
+
+### Sequence aliases
+
+```bash
+./.venv/bin/python align_conservation_plot.py -i aln.srspair -o fig.svg \
+    --alias "NODE_1_length=Assembled Contig 1" \
+    --alias "NC_004718.3=SARS-CoV Tor2"
+```
+
+Aliases apply to the figure title, the x-axis label, the table subtitle and the
+Markdown header. The data exports keep the original names and add
+`sequence_aliases` / `display_names` to `summary.json`. Unknown names only
+produce a warning.
+
+### Figure and table switches
+
+| Switch | Hides | Notes |
+|---|---|---|
+| `--no-title` | Figure title | `--title` is ignored when set |
+| `--no-subtitle` | Figure subtitle | The `21,072 columns …` line |
+| `--no-gap-track` | Gap% track | Indel ticks are part of this track |
+| `--no-gene-track` | Gene track | Annotation is not read; `Region` column disappears |
+| `--no-footer` | Figure note | The window/step/genome line |
+| `--no-table-title` | Table title | |
+| `--no-table-subtitle` | Table subtitle | Alignment, region, window, identity summary |
+| `--no-table-note` | Table note | Also hides the `Indel %` column |
+| `--hide-table-column` | One table column | `#` and `Coordinates (bp)` cannot be hidden |
+
+Linkage rules:
+
+- Turning the gene track off also removes the `Region` column, and the figure
+  footer then omits the gene source.
+- The table note explains the `Indel %` figure, so the note and that column are
+  shown or hidden together.
+- `--indel-min` keeps working regardless of any display switch.
 
 ## Graphical interface
 
@@ -112,9 +162,14 @@ follows `--lang`.
 # or double-click run_gui.command
 ```
 
-- Parameters on the left, live preview on the right.
+- Parameters on the left (the panel scrolls), live preview on the right.
 - The "annotation file or accession" field accepts `NC_004718.3` directly and
-  downloads it (with caching).
+  downloads it (with caching). The **Gene track** checkbox next to it disables
+  that field when switched off.
+- **Sequence aliases** is a small text box: picking an alignment file fills in
+  one `name=` line per sequence, and you edit the right-hand side.
+- **Display switches** and **Table columns** mirror the CLI options above; the
+  table tab updates as soon as they change.
 - The right pane has **Figure / Table** tabs; the table is the low-conservation
   overview whose indices match the numbered hotspots in the figure.
 - Computation runs on a background thread, so the window stays responsive.

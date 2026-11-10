@@ -75,7 +75,7 @@ figure.pdf
 | `-o, --out` | `<input>_conservation.svg` | SVG 输出路径 |
 | `--pdf [PATH]` | 关 | 同时输出 PDF |
 | `--png [PATH]` | 关 | 同时输出 PNG（`--dpi` 控制分辨率） |
-| `--coords-seq` | `1` | 用第几条序列做坐标轴（1-based）。与参考基因组比对时通常设为 `2` |
+| `--coords-seq` | `1` | 用第几条序列做坐标轴（1-based）。通常设为参考基因组|
 | `--window` / `--step` | `300` / `50` | 滑窗大小与步长（bp） |
 | `--annotation` | 无 | 注释文件路径，**或 NCBI accession（如 `NC_004718.3`）** |
 | `--annotation-timeout` | `60` | 在线下载超时（秒） |
@@ -90,11 +90,55 @@ figure.pdf
 | `--keep-terminal-gaps` | 关 | 保留两端全 gap 列（默认剔除） |
 | `--lang` | `en` | 图内文字语言，`zh` 自动用 PingFang SC |
 | `--stats-out` | 无 | 导出逐窗口统计 TSV |
+| `--alias NAME=ALIAS` | 无 | 序列显示别名（可重复） |
+| `--no-title` | 关 | 关闭图标题 |
+| `--no-subtitle` | 关 | 关闭图副标题 |
+| `--no-gap-track` | 关 | 关闭 gap% 轨道（其上的 indel 刻度随之消失） |
+| `--no-gene-track` | 关 | 关闭基因轨道；不读取注释，并隐藏 `Region` 列 |
+| `--no-footer` | 关 | 关闭图底部注释行 |
+| `--no-table-title` | 关 | 关闭表标题 |
+| `--no-table-subtitle` | 关 | 关闭表副标题 |
+| `--hide-table-column COL` | 无 | 隐藏 `length` / `ident_ungapped` / `ident_with_gaps` / `indel` / `region`（可重复） |
+| `--no-table-note` | 关 | 关闭表底部注释行，并同步隐藏 `插入或删除 %` 列 |
 | `--summary-out` | 无 | 导出 JSON 摘要 |
 | `--hotspot-table-md` | 无 | 把低保守区表导出为 Markdown |
 | `--pdf-with-table` | 关 | 把低保守区表追加到 PDF（图仍在第 1 页） |
 | `--figsize W H` | 自动 | 图幅尺寸（英寸） |
 | `--gui` | — | 启动图形界面 |
+
+## 显示控制
+
+图与表的每个部分都能单独关闭，序列名也可以不改源文件直接换显示名。
+
+### 序列别名
+
+```bash
+./.venv/bin/python align_conservation_plot.py -i aln.srspair -o fig.svg \
+    --alias "NODE_1_length=Assembled Contig 1" \
+    --alias "NC_004718.3=SARS-CoV Tor2"
+```
+
+别名作用于图标题、x 轴标签、表副标题与 Markdown 顶部说明。数据导出保留原始序列名，并在 `summary.json` 里另存 `sequence_aliases` / `display_names`。写了不存在的名字只会产生一条 warning。
+
+### 图与表的开关
+
+| 开关 | 关闭的内容 | 说明 |
+|---|---|---|
+| `--no-title` | 图标题 | 同时给 `--title` 也不显示 |
+| `--no-subtitle` | 图副标题 | 即 `21,072 columns …` 那一行 |
+| `--no-gap-track` | gap% 轨道 | indel 刻度属于该轨道，一并消失 |
+| `--no-gene-track` | 基因轨道 | 不再读取注释，`Region` 列消失 |
+| `--no-footer` | 图底部注释行 | 窗口/步长/基因组那一行 |
+| `--no-table-title` | 表标题 | |
+| `--no-table-subtitle` | 表副标题 | 比对、区间、窗口与一致度摘要 |
+| `--no-table-note` | 表底部注释行 | 同时隐藏 `插入或删除 %` 列 |
+| `--hide-table-column` | 指定表格列 | `#` 与 `Coordinates (bp)` 不可隐藏 |
+
+联动规则：
+
+- 关闭基因轨道会同时去掉 `Region` 列，图页脚也不再显示基因来源。
+- 表底部注释行解释的是 `插入或删除 %`，所以两者同显同隐。
+- `--indel-min` 不受任何显示开关影响，始终生效。
 
 ## 图形界面
 
@@ -103,8 +147,10 @@ figure.pdf
 # 或双击 run_gui.command
 ```
 
-- 左侧填写参数，右侧实时预览；
-- 「注释文件或 accession」框可以直接填 `NC_004718.3`，联网下载（有缓存）；
+- 左侧填写参数（面板可滚动），右侧实时预览；
+- 「注释文件或 accession」框可以直接填 `NC_004718.3`，联网下载（有缓存）；其左侧的「基因轨道」复选框关闭时会禁用该输入框；
+- 「序列别名」是一个小文本框：选好比对文件后会自动为每条序列填一行 `原名=`，把等号右边改成想要的显示名即可；
+- 「显示开关」与「表格列」对应上面的命令选项，改动后表格页签立即刷新；
 - 右侧分「图 / 表」两个页签，表为低保守区一览（序号与图中编号一一对应）；
 - 计算在后台线程执行，不阻塞界面；
 - 导出时按标准图幅重新渲染，结果与窗口被拖成多大无关。

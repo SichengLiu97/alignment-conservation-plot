@@ -3,6 +3,11 @@
     "NODE_1_length",
     "NC_004718.3"
   ],
+  "sequence_aliases": {},
+  "display_names": [
+    "NODE_1_length",
+    "NC_004718.3"
+  ],
   "source_format": "emboss",
   "alignment_columns": 30108,
   "coordinate_sequence": "NC_004718.3",
