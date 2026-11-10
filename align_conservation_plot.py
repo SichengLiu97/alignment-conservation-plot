@@ -1455,6 +1455,29 @@ def sequence_aliases(opts) -> Dict[str, str]:
     return parse_aliases(getattr(opts, "alias", None))
 
 
+class DuplicateDisplayNameError(ValueError):
+    """Raised when aliases would make two sequences share a display name."""
+
+    def __init__(self, names: Sequence[str]):
+        self.names = list(names)
+        super().__init__(
+            "duplicate display name(s) after applying aliases: " + ", ".join(self.names)
+        )
+
+
+def duplicate_display_names(names: Sequence[str], aliases: Dict[str, str]) -> List[str]:
+    """Display names that would appear more than once.
+
+    A sequence keeps its original name unless an alias is given, so a clash can
+    come from aliasing one sequence onto another's name or onto a shared alias.
+    """
+    counts: Dict[str, int] = {}
+    for name in names:
+        shown = aliases.get(name, name)
+        counts[shown] = counts.get(shown, 0) + 1
+    return sorted(shown for shown, count in counts.items() if count > 1)
+
+
 def display_names(result: AnalysisResult, opts) -> List[str]:
     """Sequence names as they should appear in figures, tables and Markdown."""
     aliases = sequence_aliases(opts)
@@ -2017,6 +2040,9 @@ def _run_cli_inner(args, out: str) -> int:
     # Validate the alias syntax before doing any expensive work.
     args.aliases = parse_aliases(getattr(args, "alias", None))
     aln = read_alignment(args.input)
+    clashes = duplicate_display_names(aln.names, args.aliases)
+    if clashes:
+        raise DuplicateDisplayNameError(clashes)
     result = analyse(
         aln,
         coords_seq=args.coords_seq,
@@ -2103,6 +2129,8 @@ GUI_TEXT = {
         "chk_col_indel": "插入或删除 %",
         "chk_col_region": "所在区域",
         "hint_alias": "选好比对文件后会自动列出序列名；把等号右边改成想要的显示名即可。",
+        "msg_alias_dup_title": "别名冲突",
+        "msg_alias_dup_body": "应用别名后有多个序列使用同一个显示名：{names}。请修改别名后重试。",
         "lbl_fig_lang": "图表文字：",
         "lang_zh": "中文",
         "lang_en": "English",
@@ -2180,6 +2208,8 @@ GUI_TEXT = {
         "chk_col_indel": "Indel %",
         "chk_col_region": "Region",
         "hint_alias": "Sequence names appear once a file is chosen; edit the right-hand side to rename them.",
+        "msg_alias_dup_title": "Alias conflict",
+        "msg_alias_dup_body": "After applying the aliases, these display names are shared by more than one sequence: {names}. Change them and try again.",
         "lbl_fig_lang": "Figure text:",
         "lang_zh": "中文",
         "lang_en": "English",
@@ -2310,10 +2340,8 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     left = ttk.Frame(left_canvas, padding=(10, 4, 12, 8))
     left_window = left_canvas.create_window((0, 0), window=left, anchor="nw")
     def _fit_panel(_event=None):
+        """Keep the scrollregion in sync; the width is fixed after measuring."""
         left_canvas.configure(scrollregion=left_canvas.bbox("all"))
-        needed = min(left.winfo_reqwidth() + 22, 560)
-        if abs(int(left_canvas.cget("width")) - needed) > 2:
-            left_canvas.configure(width=needed)
 
     left.bind("<Configure>", _fit_panel)
     left_canvas.bind(
@@ -2328,33 +2356,47 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         target = first * total + pixels
         left_canvas.yview_moveto(max(0.0, min(1.0, target / total)))
 
+    def _wheel_target():
+        """Widget under the pointer, or None when it is outside the panel."""
+        try:
+            widget = root.winfo_containing(root.winfo_pointerx(), root.winfo_pointery())
+        except tk.TclError:
+            return None
+        while widget is not None:
+            if widget is left_outer:
+                return widget
+            if widget is alias_text:
+                # Let the text box scroll itself.
+                return None
+            parent = widget.winfo_parent()
+            if not parent:
+                return None
+            try:
+                widget = widget.nametowidget(parent)
+            except KeyError:
+                return None
+        return None
+
     def _on_wheel(event):
+        if _wheel_target() is None:
+            return None
         delta = getattr(event, "delta", 0)
-        if not delta:
-            return "break"
-        # macOS sends small deltas (trackpads send fractions), Windows sends
-        # multiples of 120.
-        pixels = -delta * 15.0 if abs(delta) <= 10 else -delta / 120.0 * 36.0
+        num = getattr(event, "num", 0)
+        if delta:
+            # macOS reports ~1 per notch (trackpads send fractions); Windows 120.
+            pixels = -delta * 15.0 if abs(delta) <= 10 else -delta / 120.0 * 36.0
+        elif num in (4, 5):
+            pixels = -36.0 if num == 4 else 36.0
+        else:
+            return None
         _scroll_pixels(pixels)
         return "break"
 
-    def _on_wheel_up(_event):
-        _scroll_pixels(-36)
-        return "break"
-
-    def _on_wheel_down(_event):
-        _scroll_pixels(36)
-        return "break"
-
-    def bind_wheel(widget):
-        """Wheel events go to the widget under the pointer, not its parent."""
-        widget.bind("<MouseWheel>", _on_wheel)
-        widget.bind("<Button-4>", _on_wheel_up)
-        widget.bind("<Button-5>", _on_wheel_down)
-        for child in widget.winfo_children():
-            bind_wheel(child)
-
-    bind_wheel(left_canvas)
+    # A single binding on the toplevel is far more reliable than per-widget
+    # bindings: every child inherits it, including widgets created later.
+    root.bind_all("<MouseWheel>", _on_wheel)
+    root.bind_all("<Button-4>", _on_wheel)
+    root.bind_all("<Button-5>", _on_wheel)
 
     left.grid_columnconfigure(0, minsize=175)
     right = ttk.Frame(root, padding=(4, 8, 8, 8))
@@ -2435,15 +2477,17 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     row += 1
 
     # --- sequence aliases --------------------------------------------------
-    sec_alias = ttk.Label(left, font=("PingFang SC", 9, "bold"))
-    sec_alias.grid(row=row, column=0, columnspan=3, sticky="w", pady=(8, 0))
-    register(sec_alias, "sec_alias")
+    # Collapsed by default: most runs do not rename sequences.
+    state["alias_open"] = tk.BooleanVar(value=False)
+    alias_toggle = ttk.Checkbutton(left, variable=state["alias_open"], style="Toolbutton")
+    alias_toggle.grid(row=row, column=0, columnspan=3, sticky="w", pady=(8, 0))
+    register(alias_toggle, "sec_alias")
     row += 1
     alias_box = ttk.Frame(left)
     alias_box.grid(row=row, column=0, columnspan=3, sticky="we")
     alias_text = tk.Text(
         alias_box,
-        height=3,
+        height=5,
         width=20,
         wrap="none",
         font=("PingFang SC", 9),
@@ -2462,6 +2506,20 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     alias_hint.grid(row=row, column=0, columnspan=3, sticky="w")
     register(alias_hint, "hint_alias")
     row += 1
+
+    def refresh_alias_visibility(*_args):
+        """Collapse or expand the alias editor and keep the arrow in step."""
+        open_ = state["alias_open"].get()
+        alias_toggle.configure(text=("▾ " if open_ else "▸ ") + text("sec_alias"))
+        if open_:
+            alias_box.grid()
+            alias_hint.grid()
+        else:
+            alias_box.grid_remove()
+            alias_hint.grid_remove()
+        root.after_idle(_fit_panel)
+
+    state["alias_open"].trace_add("write", refresh_alias_visibility)
 
     def fill_aliases():
         path = state["input"].get().strip()
@@ -2810,6 +2868,8 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         notebook.tab(0, text=text("tab_figure"))
         notebook.tab(1, text=text("tab_table"))
         switch_btn.configure(text=text("btn_switch_lang"))
+        refresh_alias_visibility()
+        root.after_idle(_fit_panel)
         refresh_table_headers()
         refresh_table_rows()
         refresh_table_layout()
@@ -2877,6 +2937,10 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         def worker():
             try:
                 aln = read_alignment(args.input)
+                clashes = duplicate_display_names(aln.names, args.aliases)
+                if clashes:
+                    task_queue.put(("dup", clashes, None))
+                    return
                 result = analyse(
                     aln,
                     coords_seq=args.coords_seq,
@@ -2910,6 +2974,14 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
                 task_queue.put(("error", err, None))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def fail_duplicates(names) -> None:
+        draw_btn.configure(state="normal")
+        if app["result"] is not None:
+            export_btn.configure(state="normal")
+        message = text("msg_alias_dup_body").format(names=", ".join(names))
+        status.set(text("status_failed").format(msg=message))
+        messagebox.showerror(text("msg_alias_dup_title"), message)
 
     def fail(message: str):
         draw_btn.configure(state="normal")
@@ -2956,6 +3028,8 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
                 kind, payload, extra = task_queue.get_nowait()
                 if kind == "ok":
                     finish(payload, extra)
+                elif kind == "dup":
+                    fail_duplicates(payload)
                 else:
                     fail(payload)
         except queue.Empty:
@@ -3074,11 +3148,28 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
+    def measure_panel_width() -> int:
+        """Widest needed width across both languages, so switching never reflows."""
+        saved = gui_lang["value"]
+        widths = []
+        for lang_value in ("en", "zh"):
+            gui_lang["value"] = lang_value
+            for widget, key, attr in registry:
+                try:
+                    widget.configure(**{attr: text(key)})
+                except tk.TclError:
+                    pass
+            root.update_idletasks()
+            widths.append(left.winfo_reqwidth())
+        gui_lang["value"] = saved
+        return min(max(widths) + 24, 640)
+
+    left_canvas.configure(width=measure_panel_width())
+
     apply_language()
     sync_gene_dependent_widgets()
     sync_note_and_indel()
     refresh_table_layout()
-    bind_wheel(left)
     left_canvas.yview_moveto(0.0)
     root.after(120, poll_tasks)
 

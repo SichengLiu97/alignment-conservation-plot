@@ -130,8 +130,14 @@ can be relabelled without touching the alignment file.
 
 Aliases apply to the figure title, the x-axis label, the table subtitle and the
 Markdown header. The data exports keep the original names and add
-`sequence_aliases` / `display_names` to `summary.json`. Unknown names only
-produce a warning.
+`sequence_aliases` / `display_names` to `summary.json`.
+
+Two rules keep the labels unambiguous:
+
+- Names that do not appear in the alignment only produce a warning.
+- Display names must stay unique. If an alias collides with another sequence's
+  name or with another alias, the run stops with an error (and the GUI shows a
+  dialog) instead of drawing a figure with two identical labels.
 
 ### Figure and table switches
 
@@ -166,8 +172,9 @@ Linkage rules:
 - The "annotation file or accession" field accepts `NC_004718.3` directly and
   downloads it (with caching). The **Gene track** checkbox next to it disables
   that field when switched off.
-- **Sequence aliases** is a small text box: picking an alignment file fills in
-  one `name=` line per sequence, and you edit the right-hand side.
+- **Sequence aliases** is collapsed by default; expand it to edit. Picking an
+  alignment file fills in one `name=` line per sequence, and you edit the
+  right-hand side.
 - **Display switches** and **Table columns** mirror the CLI options above; the
   table tab updates as soon as they change.
 - The right pane has **Figure / Table** tabs; the table is the low-conservation
