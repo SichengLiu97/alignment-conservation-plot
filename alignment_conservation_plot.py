@@ -1127,13 +1127,16 @@ def font_notice(name: Optional[str], lang: str = "en") -> str:
         kind = "开源" if open_licence else "专有"
         return (
             f"图表将使用「{name}」（{licence}，{kind}许可）渲染。"
-            "「数据」与「低保守区表 Markdown」导出不含渲染文字。"
+            "「数据」与「低保守区表 Markdown」导出不含渲染文字；"
+            "SVG 只保存文字与字体列表、不含字形，显示时才解析。"
             "许可信息可能已过时，正式发布前请自行核实。"
         )
     kind = "open licence" if open_licence else "proprietary licence"
     return (
         f'Figures will be rendered with "{name}" ({licence}, {kind}).'
-        ' The "Data" and "Hotspot table Markdown" exports contain no rendered text.'
+        ' The "Data" and "Hotspot table Markdown" exports contain no rendered text,'
+        " and the SVG keeps text plus the font list instead of glyphs,"
+        " so it is rendered when displayed."
         " Licence information may be outdated, so please verify it before publishing."
     )
 
