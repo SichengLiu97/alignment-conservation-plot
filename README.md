@@ -98,6 +98,7 @@ follows `--lang`.
 | `--hotspot-pct` | empty | Use a percentile threshold instead (takes precedence over `--hotspot-k`) |
 | `--keep-terminal-gaps` | off | Keep terminal all-gap columns (trimmed by default) |
 | `--lang` | `en` | Figure text language (`en` / `zh`); the font chain is the same for both |
+| `--show-font` | — | Print the figure font and its licence, then exit (see [Fonts](#fonts)) |
 | `--stats-out` | none | Write the per-window statistics TSV |
 | `--alias NAME=ALIAS` | none | Display alias for a sequence name (repeatable) |
 | `--no-title` | off | Hide the figure title |
@@ -215,22 +216,34 @@ figure on page 1 and the table from page 2. Table only starts on page 1.
 
 ### Fonts
 
-The language option only changes the text, never the font. Both languages use
-one cross-platform chain, applied per glyph:
+The language option only changes the text, never the font. One font list serves
+both languages and is resolved per glyph, ordered by three rules: **open licence
+first**, then **sans-serif before serif**, then **CJK-capable before Latin-only**.
 
-```
-PingFang SC / Hiragino Sans GB / Heiti SC / Songti SC   (macOS)
-Microsoft YaHei / SimHei                                (Windows)
-Noto Sans CJK SC / Source Han Sans SC / WenQuanYi Zen Hei (Linux)
-Arial Unicode MS / DejaVu Sans                          (last resort)
+| Order | Font | Licence |
+|---|---|---|
+| 1–2 | Source Han Sans SC / Source Han Sans | SIL OFL 1.1 |
+| 3–5 | Noto Sans CJK SC / Noto Sans CJK / Noto Sans | SIL OFL 1.1 |
+| 6 | Source Sans Pro / Source Sans 3 | SIL OFL 1.1 |
+| 7 | DejaVu Sans | Bitstream Vera |
+| 8–13 | PingFang SC, Hiragino Sans GB, Heiti SC, Microsoft YaHei, SimHei, Arial Unicode MS | proprietary |
+
+The first installed family wins; characters it lacks fall back to the next one,
+so a Latin font early in the list still renders Chinese. Proprietary system
+fonts are a last resort — they work locally but cannot be redistributed, so this
+repository ships no font files. Details and the evidence behind each licence are
+in [FONTS.md](FONTS.md).
+
+Print the font your installation actually picked, with its licence:
+
+```bash
+./.venv/bin/python align_conservation_plot.py --show-font
 ```
 
-The first installed family wins, and characters missing from it fall back to
-the next one, so mixed Chinese/English labels stay intact. `DejaVu Sans` ships
-with matplotlib, so an unknown platform still gets readable Latin text. SVG
-keeps text as text (`svg.fonttype = none`), so the reader's browser picks the
-font; PDF embeds a subset (`pdf.fonttype = 42`) and looks the same everywhere.
-The GUI picks its own font from the same list at start-up.
+SVG keeps text as text (`svg.fonttype = none`), so the reader's browser resolves
+the font; PDF embeds a subset (`pdf.fonttype = 42`) and looks the same
+everywhere. The GUI picks its font from the same list at start-up and shows the
+same sentence above its status bar.
 
 ### Interface and figure language
 

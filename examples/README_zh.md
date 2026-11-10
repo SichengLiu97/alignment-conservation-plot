@@ -30,6 +30,7 @@
     -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o examples/example.svg --pdf --png \
     --coords-seq 2 --annotation NC_004718.3 \
+    --alias "NODE_1_length=SRR11528307 Contig 1" \
     --stats-out examples/windows.tsv --summary-out examples/summary.json \
     --hotspot-table-md examples/hotspots.md --pdf-with-table
 ```
@@ -48,7 +49,8 @@
 ./.venv/bin/python align_conservation_plot.py \
     -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o examples/example.svg --pdf --coords-seq 2 \
-    --annotation NC_004718.3
+    --annotation NC_004718.3 \
+    --alias "NODE_1_length=SRR11528307 Contig 1"
 ```
 
 首次运行会从 NCBI 下载并缓存到 `~/Library/Caches/align-conservation-plot/NC_004718.3.gb`，之后离线也能用。

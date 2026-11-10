@@ -51,6 +51,7 @@ Everything in this directory was generated from
     -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o examples/example.svg --pdf --png \
     --coords-seq 2 --annotation NC_004718.3 \
+    --alias "NODE_1_length=SRR11528307 Contig 1" \
     --stats-out examples/windows.tsv --summary-out examples/summary.json \
     --hotspot-table-md examples/hotspots.md --pdf-with-table
 ```
@@ -70,12 +71,20 @@ instead and the program downloads it:
 ./.venv/bin/python align_conservation_plot.py \
     -i "examples/sars-cov-2-assembled-contig-vs-sars-cov.srspair" \
     -o examples/example.svg --pdf --coords-seq 2 \
-    --annotation NC_004718.3
+    --annotation NC_004718.3 \
+    --alias "NODE_1_length=SRR11528307 Contig 1"
 ```
 
 The first run caches the record at
 `~/Library/Caches/align-conservation-plot/NC_004718.3.gb`, so later runs work
 offline.
+
+The `--alias` flag renames the contig in the figure only; the alignment file is
+untouched, and the data exports keep the original name alongside the alias.
+
+The figures are drawn with the first open-licence font available on your system
+(here "Source Han Sans SC"); `--show-font` reports which one and its licence —
+see [Fonts](../README.md#fonts).
 
 Numbers to compare against: terminal gaps 8,917 / 119, 21,072 core columns,
 17,219 matches, 3,185 mismatches, identity 84.4%.

@@ -88,9 +88,10 @@ figure.pdf
 | `--hotspot-k` | `1.5` | 热点阈值 = median − k × 1.4826 × MAD |
 | `--hotspot-pct` | 空 | 改用百分位阈值（优先于 `--hotspot-k`） |
 | `--keep-terminal-gaps` | 关 | 保留两端全 gap 列（默认剔除） |
-| `--lang` | `en` | 图内文字语言（`en` / `zh`），两种语言用同一套字体链 |
+| `--lang` | `en` | 图内文字语言（`en` / `zh`），两种语言用同一套字体列表 |
+| `--show-font` | — | 打印图表实际使用的字体及其许可后退出（详见[字体](#字体)） |
 | `--stats-out` | 无 | 导出逐窗口统计 TSV |
-| `--alias NAME=ALIAS` | 无 | 序列显示别名（可重复） |
+| `--alias NAME=ALIAS` | 无 | 序列显示别名；可多次指定，每次对应一条序列 |
 | `--no-title` | 关 | 关闭图标题 |
 | `--no-subtitle` | 关 | 关闭图副标题 |
 | `--no-gap-track` | 关 | 关闭 gap% 轨道（其上的 indel 刻度随之消失） |
@@ -98,7 +99,7 @@ figure.pdf
 | `--no-footer` | 关 | 关闭图底部注释行 |
 | `--no-table-title` | 关 | 关闭表标题 |
 | `--no-table-subtitle` | 关 | 关闭表副标题 |
-| `--hide-table-column COL` | 无 | 隐藏 `length` / `ident_ungapped` / `ident_with_gaps` / `indel` / `region`（可重复） |
+| `--hide-table-column COL` | 无 | 隐藏 `length` / `ident_ungapped` / `ident_with_gaps` / `indel` / `region`；可多次指定 |
 | `--no-table-note` | 关 | 关闭表底部注释行，并同步隐藏 `插入或删除 %` 列 |
 | `--summary-out` | 无 | 导出 JSON 摘要 |
 | `--hotspot-table-md` | 无 | 把低保守区表导出为 Markdown |
@@ -185,16 +186,25 @@ PDF 的「图」「表」可同时勾选：都勾时写一个文件，图在第 
 
 ### 字体
 
-语言选项只改文字，不改字体。中英文共用同一条跨平台字体链，并按**逐字符**回退：
+语言选项只改文字，不改字体。中英文共用同一份字体列表，并按**逐字符**回退，排序遵循三条规则：**开源许可优先**、**无衬线优先于衬线**、**支持中文优先于仅拉丁**。
 
-```
-PingFang SC / Hiragino Sans GB / Heiti SC / Songti SC   （macOS）
-Microsoft YaHei / SimHei                                （Windows）
-Noto Sans CJK SC / Source Han Sans SC / WenQuanYi Zen Hei（Linux）
-Arial Unicode MS / DejaVu Sans                          （兜底）
+| 次序 | 字体 | 许可 |
+|---|---|---|
+| 1–2 | Source Han Sans SC / Source Han Sans（思源黑体） | SIL OFL 1.1 |
+| 3–5 | Noto Sans CJK SC / Noto Sans CJK / Noto Sans | SIL OFL 1.1 |
+| 6 | Source Sans Pro / Source Sans 3 | SIL OFL 1.1 |
+| 7 | DejaVu Sans | Bitstream Vera |
+| 8–13 | PingFang SC、Hiragino Sans GB、Heiti SC、Microsoft YaHei、SimHei、Arial Unicode MS | 专有 |
+
+取第一个已安装的字体，遇到它缺的字符再往后回退，因此列表靠前的纯拉丁字体也能正常显示中文。专有系统字体只作兜底——本机可用但不能随项目分发，所以仓库不附带任何字体文件。各字体许可的判断依据见 [FONTS.md](FONTS.md)。
+
+打印当前实际选用的字体及其许可：
+
+```bash
+./.venv/bin/python align_conservation_plot.py --show-font
 ```
 
-取第一个已安装的字体，遇到它没有的字符再往后回退，因此中英混排不会出现方框。`DejaVu Sans` 随 matplotlib 一起安装，未知平台上至少拉丁文字仍然可读。SVG 保留文本（`svg.fonttype = none`），由阅读器的浏览器选字体；PDF 嵌入字体子集（`pdf.fonttype = 42`），各平台显示一致。GUI 在启动时用同一份候选表选择界面字体。
+SVG 保留文本（`svg.fonttype = none`），由阅读器的浏览器选字体；PDF 嵌入字体子集（`pdf.fonttype = 42`），各平台显示一致。GUI 启动时用同一份列表选择界面字体，并在状态栏上方显示同一句话。
 
 ### 界面及图表语言
 

@@ -1,6 +1,6 @@
 # Low-conservation regions
 
-- Alignment: `NODE_1_length` vs `NC_004718.3`
+- Alignment: `SRR11528307 Contig 1` vs `NC_004718.3`
 - Coordinate sequence: `NC_004718.3`
 - Compared region: 8,918–29,632 (20,715 bp)
 - Window / step: 300 bp / 50 bp

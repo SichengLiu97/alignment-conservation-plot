@@ -1030,16 +1030,57 @@ LANG_PRESETS = {
 }
 
 
-UI_FONT_CANDIDATES = (
-    "PingFang SC",        # macOS
-    "Hiragino Sans GB",   # macOS
-    "Microsoft YaHei",    # Windows
-    "SimHei",             # Windows
-    "Noto Sans CJK SC",   # Linux
+# Font choices, ordered by three rules: open licence first, sans-serif before
+# serif, CJK-capable before Latin-only.  See FONTS.md for the licence evidence.
+FONT_LICENSES: Dict[str, Tuple[str, bool]] = {
+    # SIL Open Font License 1.1 — embeddable and redistributable
+    "Source Han Sans SC": ("SIL Open Font License 1.1", True),
+    "Source Han Sans": ("SIL Open Font License 1.1", True),
+    "Noto Sans CJK SC": ("SIL Open Font License 1.1", True),
+    "Noto Sans CJK": ("SIL Open Font License 1.1", True),
+    "Noto Sans": ("SIL Open Font License 1.1", True),
+    "Source Sans Pro": ("SIL Open Font License 1.1", True),
+    "Source Sans 3": ("SIL Open Font License 1.1", True),
+    "Source Han Serif SC": ("SIL Open Font License 1.1", True),
+    # Bitstream Vera licence — permissive, embeddable
+    "DejaVu Sans": ("Bitstream Vera licence", True),
+    # Proprietary system fonts: usable on the machine that has them, but they
+    # cannot be redistributed with the project.
+    "PingFang SC": ("proprietary licence (Apple/DynaComware)", False),
+    "PingFang HK": ("proprietary licence (Apple/DynaComware)", False),
+    "PingFang TC": ("proprietary licence (Apple/DynaComware)", False),
+    "Hiragino Sans GB": ("proprietary licence (Apple/SCREEN)", False),
+    "Heiti SC": ("proprietary licence (Apple/SinoType)", False),
+    "Microsoft YaHei": ("proprietary licence (Microsoft)", False),
+    "SimHei": ("proprietary licence (Microsoft)", False),
+    "Arial Unicode MS": ("proprietary licence (Monotype)", False),
+    "Songti SC": ("proprietary licence (Apple/SinoType)", False),
+}
+
+# Render order: open + sans + CJK, then open + sans, then proprietary sans,
+# then proprietary serif as the final resort.
+FIGURE_FONT_ORDER: Tuple[str, ...] = (
     "Source Han Sans SC",
-    "WenQuanYi Zen Hei",
+    "Source Han Sans",
+    "Noto Sans CJK SC",
+    "Noto Sans CJK",
+    "Noto Sans",
+    "Source Sans Pro",
+    "Source Sans 3",
+    "DejaVu Sans",
+    "PingFang SC",
+    "PingFang HK",
+    "PingFang TC",
+    "Hiragino Sans GB",
+    "Heiti SC",
+    "Microsoft YaHei",
+    "SimHei",
     "Arial Unicode MS",
+    "Songti SC",
+    "Source Han Serif SC",
 )
+
+UI_FONT_CANDIDATES = FIGURE_FONT_ORDER
 
 
 def pick_ui_font(available: Iterable[str]) -> str:
@@ -1051,6 +1092,51 @@ def pick_ui_font(available: Iterable[str]) -> str:
     return "TkDefaultFont"
 
 
+def pick_figure_font(available: Iterable[str]) -> Optional[str]:
+    """First installed figure font, in licence/sans/CJK preference order."""
+    installed = set(available)
+    for family in FIGURE_FONT_ORDER:
+        if family in installed:
+            return family
+    return None
+
+
+def font_license(name: str) -> Tuple[str, bool]:
+    return FONT_LICENSES.get(name, ("unknown licence", False))
+
+
+def font_notice(name: Optional[str], lang: str = "en") -> str:
+    """One sentence naming the figure font and its licence, for CLI and GUI."""
+    if not name:
+        if lang == "zh":
+            return "未找到候选字体，将回退到 matplotlib 自带字体；许可信息未知，请自行核实。"
+        return (
+            "No preferred font was found, so matplotlib's built-in font will be used; "
+            "its licence is unknown here, so please verify it yourself."
+        )
+    licence, open_licence = font_license(name)
+    if lang == "zh":
+        kind = "开源" if open_licence else "专有"
+        return (
+            f"图表将使用「{name}」（{licence}，{kind}许可）渲染。"
+            "「数据」与「低保守区表 Markdown」导出不含渲染文字。"
+            "许可信息可能已过时，正式发布前请自行核实。"
+        )
+    kind = "open licence" if open_licence else "proprietary licence"
+    return (
+        f'Figures will be rendered with "{name}" ({licence}, {kind}).'
+        ' The "Data" and "Hotspot table Markdown" exports contain no rendered text.'
+        " Licence information may be outdated, so please verify it before publishing."
+    )
+
+
+def available_font_families() -> List[str]:
+    """Family names matplotlib can currently see."""
+    from matplotlib import font_manager
+
+    return sorted({f.name for f in font_manager.fontManager.ttflist})
+
+
 def configure_matplotlib(lang: str) -> None:
     import logging
 
@@ -1060,22 +1146,9 @@ def configure_matplotlib(lang: str) -> None:
     # logs a noisy warning on every run.
     logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
 
-    # A list in font.family is resolved per glyph: a Latin font first means
-    # English picks it and CJK text still falls back to the next family.
-    # font.sans-serif only selects one font for the whole string.
-    matplotlib.rcParams["font.family"] = [
-        "PingFang SC",        # macOS
-        "Hiragino Sans GB",   # macOS
-        "Heiti SC",           # macOS
-        "Songti SC",          # macOS
-        "Microsoft YaHei",    # Windows
-        "SimHei",             # Windows
-        "Noto Sans CJK SC",   # Linux
-        "Source Han Sans SC", # cross-platform Adobe/Google release
-        "WenQuanYi Zen Hei",  # Linux fallback
-        "Arial Unicode MS",
-        "DejaVu Sans",        # ships with matplotlib, always available
-    ]
+    # A list in font.family is resolved per glyph; font.sans-serif would pick a
+    # single font for the whole string and drop characters it lacks.
+    matplotlib.rcParams["font.family"] = list(FIGURE_FONT_ORDER)
     matplotlib.rcParams["axes.unicode_minus"] = False
     matplotlib.rcParams["svg.fonttype"] = "none"  # keep text editable
     matplotlib.rcParams["pdf.fonttype"] = 42
@@ -2014,6 +2087,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="hide the table note and the Indel %% column together",
     )
+    p.add_argument(
+        "--show-font",
+        action="store_true",
+        help="print the figure font and its licence, then exit",
+    )
     p.add_argument("--top", type=int, default=10, help="number of hotspots to print")
     p.add_argument("--gui", action="store_true", help="launch the Tkinter GUI")
     p.add_argument("--version", action="version", version="align_conservation_plot 1.0")
@@ -2347,6 +2425,14 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     task_queue: "queue.Queue[tuple]" = queue.Queue()
     registry: List[Tuple[object, str, str]] = []
     app = {"fig": None, "result": None, "args": None, "canvas": None, "toolbar": None}
+
+    def refresh_font_notice() -> None:
+        """State which font renders the figures, and under which licence."""
+        try:
+            chosen = pick_figure_font(available_font_families())
+        except Exception:  # noqa: BLE001 - a missing font must not break start-up
+            chosen = None
+        font_var.set(font_notice(chosen, gui_lang["value"]))
 
     def text(key: str) -> str:
         return GUI_TEXT[gui_lang["value"]].get(key, key)
@@ -2755,6 +2841,13 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
     export_btn.pack(side="left", padx=6)
     register(export_btn, "btn_export")
     row += 1
+    font_var = tk.StringVar()
+    font_label = ttk.Label(
+        left, textvariable=font_var, foreground="#777", wraplength=460,
+        font=(ui_font, 8), justify="left",
+    )
+    font_label.grid(row=row, column=0, columnspan=3, sticky="w", pady=(2, 2))
+    row += 1
     status_label = ttk.Label(left, textvariable=status, foreground="#555", wraplength=340)
     status_label.grid(row=row, column=0, columnspan=3, sticky="w")
 
@@ -2897,6 +2990,7 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
         notebook.tab(0, text=text("tab_figure"))
         notebook.tab(1, text=text("tab_table"))
         switch_btn.configure(text=text("btn_switch_lang"))
+        refresh_font_notice()
         refresh_alias_visibility()
         root.after_idle(_fit_panel)
         refresh_table_headers()
@@ -3246,6 +3340,11 @@ def launch_gui(self_test: Optional[callable] = None) -> int:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.show_font:
+        configure_matplotlib(args.lang)
+        chosen = pick_figure_font(available_font_families())
+        print(font_notice(chosen, args.lang))
+        return 0
     if args.gui or (args.input is None and args.out is None):
         return launch_gui()
     return run_cli(args)

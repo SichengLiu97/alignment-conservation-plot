@@ -3,9 +3,11 @@
     "NODE_1_length",
     "NC_004718.3"
   ],
-  "sequence_aliases": {},
+  "sequence_aliases": {
+    "NODE_1_length": "SRR11528307 Contig 1"
+  },
   "display_names": [
-    "NODE_1_length",
+    "SRR11528307 Contig 1",
     "NC_004718.3"
   ],
   "source_format": "emboss",
